@@ -107,6 +107,14 @@ button { font: inherit; cursor: pointer; }
 .qty { min-width: 64px; text-align: center; }
 .qty b { font-family: var(--font-num); font-size: 1.35rem; font-variant-numeric: tabular-nums; display: block; line-height: 1.1; }
 .qty span { font-size: .72rem; color: var(--muted); }
+.qtyIn {
+  width: 72px; padding: 4px 4px; text-align: center; font-family: var(--font-num); font-size: 1.35rem; font-weight: 700;
+  font-variant-numeric: tabular-nums; line-height: 1.1; border: 1px dashed var(--line); background: var(--surface); border-radius: 8px;
+}
+.qtyIn:hover { border-color: var(--accent); }
+.qtyIn:focus { border-style: solid; border-color: var(--accent); }
+.row.out .qtyIn { color: var(--bad); }
+.row.low .qtyIn { color: var(--warn); }
 .row.out .qty b { color: var(--bad); }
 .row.low .qty b { color: var(--warn); }
 
@@ -138,6 +146,7 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color
   .tile .v { font-size: 1.3rem; }
   .stepper button { width: 36px; height: 36px; }
   .qty { min-width: 52px; }
+  .qtyIn { width: 60px; font-size: 1.2rem; }
 }
 @media (prefers-reduced-motion: no-preference) {
   .row { transition: background-color .2s; }
@@ -292,7 +301,14 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color
     } else if (!shown.length) {
       list.replaceChildren(el("div", { class: "empty" }, el("strong", {}, "条件に合う品目はありません")));
     } else {
+      const a = document.activeElement;
+      const keep = a && a.classList && a.classList.contains("qtyIn")
+        ? { id: a.dataset.id, value: a.value, s: a.selectionStart, e: a.selectionEnd } : null;
       list.replaceChildren(...shown.map(rowFor));
+      if (keep) {
+        const n = list.querySelector('.qtyIn[data-id="' + CSS.escape(keep.id) + '"]');
+        if (n) { n.value = keep.value; n.focus({ preventScroll: true }); try { n.setSelectionRange(keep.s, keep.e); } catch {} }
+      }
     }
     renderPreview();
   }
@@ -314,7 +330,17 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color
       ),
       el("div", { class: "stepper" },
         state.canWrite ? el("button", { "aria-label": it.name + "を1減らす", onclick: () => bump(it, -1), disabled: qty <= 0 ? "" : null }, "−") : null,
-        el("div", { class: "qty" }, el("b", {}, String(qty)), el("span", {}, it.unit || "")),
+        el("div", { class: "qty" },
+          state.canWrite
+            ? el("input", {
+                class: "qtyIn", type: "text", inputmode: "numeric", pattern: "[0-9]*", enterkeyhint: "done",
+                autocomplete: "off", "data-id": it.id, value: String(qty), "aria-label": it.name + "の数量（タップして入力）",
+                onfocus: (e) => e.target.select(),
+                onkeydown: (e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { e.target.value = String(qtyOf(it)); e.target.blur(); } },
+                onblur: (e) => commitQty(it, e.target),
+              })
+            : el("b", {}, String(qty)),
+          el("span", {}, it.unit || "")),
         state.canWrite ? el("button", { "aria-label": it.name + "を1増やす", onclick: () => bump(it, 1) }, "＋") : null,
       ),
     );
@@ -368,6 +394,18 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color
     render();
     clearTimeout(state.timers.get(it.id));
     state.timers.set(it.id, setTimeout(() => flushQty(it.id), 700));
+  }
+  function commitQty(it, input) {
+    const raw = input.value.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, "");
+    const cur = qtyOf(it);
+    if (raw === "") { input.value = String(cur); return; }
+    const next = Math.max(0, parseInt(raw, 10));
+    if (next === cur) { input.value = String(cur); return; }
+    state.pending.set(it.id, next);
+    clearTimeout(state.timers.get(it.id));
+    flushQty(it.id);
+    toast("「" + it.name + "」を " + next + (it.unit || "") + " にしました");
+    render();
   }
   async function flushQty(id) {
     if (state.writing.has(id)) { state.timers.set(id, setTimeout(() => flushQty(id), 300)); return; }
