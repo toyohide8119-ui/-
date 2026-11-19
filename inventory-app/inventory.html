@@ -1,0 +1,557 @@
+<title>みんなの在庫帳</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one column ledger — summary strip, toolbar, item rows with big +/- steppers, share panel at the end */
+:root {
+  --bg: #eef2f1;
+  --surface: #ffffff;
+  --sunk: #e3e9e7;
+  --ink: #16211e;
+  --muted: #5b6a66;
+  --line: #d3dcd9;
+  --accent: #1f5a85;
+  --accent-ink: #ffffff;
+  --ok: #2c7a4b;
+  --warn: #a8670f;
+  --warn-bg: #fbf1df;
+  --bad: #b8400e;
+  --bad-bg: #fbe6dc;
+  --share: #138a43;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111816; --surface: #19221f; --sunk: #222d2a; --ink: #e6eeeb; --muted: #97a7a2;
+    --line: #2e3b37; --accent: #6fb0e0; --accent-ink: #0d1a24; --ok: #63c58a; --warn: #e3a648;
+    --warn-bg: #3a2c14; --bad: #f08a5d; --bad-bg: #3d2117; --share: #3ccf74; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111816; --surface: #19221f; --sunk: #222d2a; --ink: #e6eeeb; --muted: #97a7a2;
+  --line: #2e3b37; --accent: #6fb0e0; --accent-ink: #0d1a24; --ok: #63c58a; --warn: #e3a648;
+  --warn-bg: #3a2c14; --bad: #f08a5d; --bad-bg: #3d2117; --share: #3ccf74; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+}
+.wrap {
+  max-width: 760px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+  display: flex; flex-direction: column; gap: 18px;
+}
+header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 1.6rem; margin: 0; letter-spacing: .02em; text-wrap: balance; }
+.sub { color: var(--muted); font-size: .85rem; margin: 2px 0 0; }
+.conn { font-size: .78rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.dot.live { background: var(--ok); }
+.dot.err { background: var(--bad); }
+
+.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tile {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  text-align: left; font: inherit; color: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 2px;
+}
+.tile[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tile .k { font-size: .75rem; color: var(--muted); letter-spacing: .04em; }
+.tile .v { font-family: var(--font-num); font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tile.warn .v { color: var(--warn); }
+.tile.bad .v { color: var(--bad); }
+
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+.toolbar input, .toolbar select { flex: 1 1 160px; min-width: 0; }
+input, select, textarea {
+  font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 8px; padding: 9px 11px; width: 100%;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+button { font: inherit; cursor: pointer; }
+.btn {
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 8px;
+  padding: 9px 14px; font-weight: 500; white-space: nowrap;
+}
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+.btn.danger { color: var(--bad); border-color: var(--bad); }
+.btn.share { background: var(--share); color: #fff; border-color: var(--share); font-weight: 700; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.list { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.row {
+  display: grid; grid-template-columns: 6px 1fr auto; gap: 0 12px; align-items: center;
+  padding: 12px 12px 12px 0; border-top: 1px solid var(--line);
+}
+.row:first-child { border-top: 0; }
+.stripe { align-self: stretch; background: var(--ok); }
+.row.low .stripe { background: var(--warn); }
+.row.out .stripe { background: var(--bad); }
+.info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.name { font-weight: 700; font-size: 1.02rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; overflow-wrap: anywhere; }
+.pill { font-size: .7rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; letter-spacing: .04em; }
+.pill.low { background: var(--warn-bg); color: var(--warn); }
+.pill.out { background: var(--bad-bg); color: var(--bad); }
+.meta { font-size: .78rem; color: var(--muted); overflow-wrap: anywhere; }
+.meta .edit { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; font-size: .78rem; }
+.stepper { display: flex; align-items: center; gap: 4px; }
+.stepper button {
+  width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--line); background: var(--sunk);
+  color: var(--ink); font-size: 1.3rem; font-weight: 700; line-height: 1;
+}
+.qty { min-width: 64px; text-align: center; }
+.qty b { font-family: var(--font-num); font-size: 1.35rem; font-variant-numeric: tabular-nums; display: block; line-height: 1.1; }
+.qty span { font-size: .72rem; color: var(--muted); }
+.row.out .qty b { color: var(--bad); }
+.row.low .qty b { color: var(--warn); }
+
+.empty { padding: 32px 20px; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.empty strong { color: var(--ink); font-size: 1.05rem; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.panel h2 { font-size: 1.05rem; margin: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color: var(--muted); min-width: 0; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.actions .spacer { flex: 1; }
+.preview {
+  white-space: pre-wrap; font-size: .85rem; background: var(--sunk); border-radius: 8px; padding: 12px;
+  max-height: 260px; overflow: auto; overflow-wrap: anywhere; margin: 0; font-family: var(--font-body);
+}
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); color: var(--ink); padding: 7px 12px; font-size: .85rem; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.note { font-size: .8rem; color: var(--muted); margin: 0; }
+.banner { font-size: .85rem; padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); }
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: .88rem;
+  max-width: calc(100% - 32px); z-index: 20;
+}
+@media (max-width: 460px) {
+  .tile .v { font-size: 1.3rem; }
+  .stepper button { width: 36px; height: 36px; }
+  .qty { min-width: 52px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .row { transition: background-color .2s; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>みんなの在庫帳</h1>
+      <p class="sub">グループで同じ在庫を見て、増減をその場で記録</p>
+    </div>
+    <div class="conn"><span class="dot" id="connDot"></span><span id="connText">接続中…</span></div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="summary" aria-label="在庫の概要">
+    <button class="tile" data-filter="all" aria-pressed="true"><span class="k">品目</span><span class="v" id="sumAll">–</span></button>
+    <button class="tile warn" data-filter="low" aria-pressed="false"><span class="k">残りわずか</span><span class="v" id="sumLow">–</span></button>
+    <button class="tile bad" data-filter="out" aria-pressed="false"><span class="k">在庫切れ</span><span class="v" id="sumOut">–</span></button>
+  </section>
+
+  <div class="toolbar">
+    <input id="q" type="search" placeholder="品名・場所で検索" aria-label="検索">
+    <select id="cat" aria-label="カテゴリ"><option value="">すべてのカテゴリ</option></select>
+    <button class="btn primary" id="addBtn">＋ 品目を追加</button>
+  </div>
+
+  <section class="panel" id="form" hidden aria-labelledby="formTitle">
+    <h2 id="formTitle">品目を追加</h2>
+    <div class="grid2">
+      <label>品名 *<input id="fName" required maxlength="60" placeholder="例：トイレットペーパー"></label>
+      <label>カテゴリ<input id="fCat" maxlength="30" list="catList" placeholder="例：日用品"></label>
+      <label>数量<input id="fQty" type="number" inputmode="decimal" min="0" step="1" value="0"></label>
+      <label>単位<input id="fUnit" maxlength="10" placeholder="個・箱・本 など" value="個"></label>
+      <label>この数以下で「残りわずか」<input id="fMin" type="number" inputmode="decimal" min="0" step="1" value="1"></label>
+      <label>保管場所<input id="fPlace" maxlength="40" placeholder="例：倉庫 棚B"></label>
+    </div>
+    <label>メモ<textarea id="fNote" rows="2" maxlength="200" placeholder="発注先・型番など"></textarea></label>
+    <datalist id="catList"></datalist>
+    <div class="actions">
+      <button class="btn danger" id="delBtn" hidden>削除</button>
+      <span class="spacer"></span>
+      <button class="btn" id="cancelBtn">キャンセル</button>
+      <button class="btn primary" id="saveBtn">保存</button>
+    </div>
+  </section>
+
+  <section class="list" id="list" aria-live="polite">
+    <div class="empty"><strong>在庫を読み込んでいます…</strong></div>
+  </section>
+
+  <section class="panel" aria-labelledby="shareTitle">
+    <h2 id="shareTitle">グループLINEに送る</h2>
+    <div class="seg" role="group" aria-label="送る内容">
+      <button id="modeNeed" aria-pressed="true">補充が必要なものだけ</button>
+      <button id="modeAll" aria-pressed="false">全品目</button>
+    </div>
+    <pre class="preview" id="preview"></pre>
+    <div class="actions">
+      <button class="btn" id="copyBtn">文面をコピー</button>
+      <a class="btn share" id="lineBtn" href="#" target="_blank" rel="noopener">LINEで送る</a>
+    </div>
+    <p class="note">「LINEで送る」でLINEが開き、送り先のトークを選べます。開かないときは文面をコピーしてトークに貼り付けてください。</p>
+  </section>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const state = {
+    items: [], filter: "all", q: "", cat: "", mode: "need",
+    db: null, user: null, me: null, canWrite: true, editing: null, names: {},
+    pending: new Map(), timers: new Map(), writing: new Set(),
+  };
+
+  // ---------- helpers ----------
+  const num = (v, d = 0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+  const statusOf = (it) => {
+    const q = qtyOf(it);
+    if (q <= 0) return "out";
+    if (q <= num(it.min, 0)) return "low";
+    return "ok";
+  };
+  const qtyOf = (it) => state.pending.has(it.id) ? state.pending.get(it.id) : num(it.qty);
+  const fmtTime = (ms) => {
+    if (!ms) return "";
+    const d = new Date(ms), now = new Date();
+    const hm = d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0");
+    if (d.toDateString() === now.toDateString()) return "今日 " + hm;
+    return (d.getMonth() + 1) + "/" + d.getDate() + " " + hm;
+  };
+  let toastTimer;
+  const toast = (msg) => {
+    const t = $("toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+  };
+  const setConn = (kind, text) => {
+    $("connDot").className = "dot" + (kind ? " " + kind : "");
+    $("connText").textContent = text;
+  };
+  const banner = (msg) => { const b = $("banner"); b.textContent = msg || ""; b.hidden = !msg; };
+  const el = (tag, props = {}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(props)) {
+      if (k === "class") n.className = v;
+      else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+      else if (v !== undefined && v !== null) n.setAttribute(k, v);
+    }
+    for (const c of kids) if (c != null) n.append(c);
+    return n;
+  };
+
+  // ---------- render ----------
+  function render() {
+    const items = state.items;
+    const low = items.filter((i) => statusOf(i) === "low").length;
+    const out = items.filter((i) => statusOf(i) === "out").length;
+    $("sumAll").textContent = items.length;
+    $("sumLow").textContent = low;
+    $("sumOut").textContent = out;
+    document.querySelectorAll(".tile").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.filter === state.filter)));
+
+    // categories
+    const cats = [...new Set(items.map((i) => (i.category || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ja"));
+    const sel = $("cat"); const cur = state.cat;
+    sel.replaceChildren(el("option", { value: "" }, "すべてのカテゴリ"), ...cats.map((c) => el("option", { value: c }, c)));
+    sel.value = cats.includes(cur) ? cur : "";
+    $("catList").replaceChildren(...cats.map((c) => el("option", { value: c })));
+
+    // rows
+    const q = state.q.trim().toLowerCase();
+    const shown = items
+      .filter((i) => state.filter === "all" || (state.filter === "low" ? statusOf(i) !== "ok" : statusOf(i) === "out"))
+      .filter((i) => !state.cat || (i.category || "") === state.cat)
+      .filter((i) => !q || [i.name, i.place, i.category, i.note].join(" ").toLowerCase().includes(q))
+      .sort((a, b) => {
+        const rank = { out: 0, low: 1, ok: 2 };
+        return rank[statusOf(a)] - rank[statusOf(b)] || String(a.name).localeCompare(String(b.name), "ja");
+      });
+
+    const list = $("list");
+    if (!state.loaded) return;
+    if (!items.length) {
+      list.replaceChildren(el("div", { class: "empty" },
+        el("strong", {}, "まだ品目がありません"),
+        el("span", {}, "「＋ 品目を追加」から最初の在庫を登録してください。グループの誰が追加しても、全員の画面にすぐ反映されます。"),
+        state.canWrite ? el("button", { class: "btn", onclick: loadSamples }, "サンプルを入れて試す") : null,
+      ));
+    } else if (!shown.length) {
+      list.replaceChildren(el("div", { class: "empty" }, el("strong", {}, "条件に合う品目はありません")));
+    } else {
+      list.replaceChildren(...shown.map(rowFor));
+    }
+    renderPreview();
+  }
+
+  function rowFor(it) {
+    const st = statusOf(it);
+    const qty = qtyOf(it);
+    const who = it.updatedBy && state.names[it.updatedBy];
+    const metaBits = [it.category, it.place && "📍" + it.place].filter(Boolean).join("・");
+    const updated = it.updatedAt ? "更新 " + fmtTime(it.updatedAt) + (who ? "（" + who + "）" : "") : "";
+    return el("div", { class: "row " + st },
+      el("div", { class: "stripe", "aria-hidden": "true" }),
+      el("div", { class: "info" },
+        el("div", { class: "name" }, it.name || "（名称なし）",
+          st === "out" ? el("span", { class: "pill out" }, "在庫切れ") : st === "low" ? el("span", { class: "pill low" }, "残りわずか") : null),
+        el("div", { class: "meta" }, [metaBits, updated].filter(Boolean).join("　")),
+        it.note ? el("div", { class: "meta" }, it.note) : null,
+        state.canWrite ? el("div", { class: "meta" }, el("button", { class: "edit", onclick: () => openForm(it) }, "編集")) : null,
+      ),
+      el("div", { class: "stepper" },
+        state.canWrite ? el("button", { "aria-label": it.name + "を1減らす", onclick: () => bump(it, -1), disabled: qty <= 0 ? "" : null }, "−") : null,
+        el("div", { class: "qty" }, el("b", {}, String(qty)), el("span", {}, it.unit || "")),
+        state.canWrite ? el("button", { "aria-label": it.name + "を1増やす", onclick: () => bump(it, 1) }, "＋") : null,
+      ),
+    );
+  }
+
+  function shareText() {
+    const d = new Date();
+    const head = "【在庫状況 " + (d.getMonth() + 1) + "/" + d.getDate() + " " + d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0") + "】";
+    const sorted = [...state.items].sort((a, b) => String(a.name).localeCompare(String(b.name), "ja"));
+    const line = (i) => "・" + i.name + "　" + qtyOf(i) + (i.unit || "");
+    const out = sorted.filter((i) => statusOf(i) === "out");
+    const low = sorted.filter((i) => statusOf(i) === "low");
+    const lines = [head];
+    if (state.mode === "need") {
+      if (!out.length && !low.length) lines.push("補充が必要なものはありません 👍");
+      if (out.length) lines.push("", "■ 在庫切れ", ...out.map(line));
+      if (low.length) lines.push("", "■ 残りわずか", ...low.map((i) => line(i) + "（目安 " + num(i.min) + "）"));
+    } else {
+      if (!sorted.length) lines.push("登録されている品目はありません");
+      const byCat = new Map();
+      for (const i of sorted) { const c = (i.category || "その他").trim() || "その他"; if (!byCat.has(c)) byCat.set(c, []); byCat.get(c).push(i); }
+      for (const [c, arr] of [...byCat].sort((a, b) => a[0].localeCompare(b[0], "ja"))) {
+        lines.push("", "■ " + c, ...arr.map((i) => line(i) + (statusOf(i) === "out" ? " ⚠在庫切れ" : statusOf(i) === "low" ? " ⚠残りわずか" : "")));
+      }
+    }
+    return lines.join("\n");
+  }
+  function renderPreview() {
+    const text = shareText();
+    $("preview").textContent = text;
+    $("lineBtn").href = "https://line.me/R/share?text=" + encodeURIComponent(text);
+    $("modeNeed").setAttribute("aria-pressed", String(state.mode === "need"));
+    $("modeAll").setAttribute("aria-pressed", String(state.mode === "all"));
+  }
+
+  // ---------- writes ----------
+  function stamp() { return { updatedAt: Date.now(), updatedBy: state.me || null }; }
+  function writeFailed(e) {
+    if (e && e.code === "invalid_argument") {
+      state.canWrite = false;
+      banner("この画面からは閲覧のみです。編集するには、作成者から「編集者」として招待してもらってください。");
+      render();
+    } else if (e && e.code === "quota_exceeded") toast("保存できる件数の上限です。不要な品目を削除してください");
+    else toast("保存できませんでした。通信状況を確認してもう一度お試しください");
+  }
+
+  function bump(it, delta) {
+    if (!state.db) return;
+    const next = Math.max(0, qtyOf(it) + delta);
+    state.pending.set(it.id, next);
+    render();
+    clearTimeout(state.timers.get(it.id));
+    state.timers.set(it.id, setTimeout(() => flushQty(it.id), 700));
+  }
+  async function flushQty(id) {
+    if (state.writing.has(id)) { state.timers.set(id, setTimeout(() => flushQty(id), 300)); return; }
+    if (!state.pending.has(id)) return;
+    const qty = state.pending.get(id);
+    state.writing.add(id);
+    try {
+      await state.db.collection("items").doc(id).update({ qty, ...stamp() });
+      if (state.pending.get(id) === qty) state.pending.delete(id);
+    } catch (e) {
+      state.pending.delete(id);
+      writeFailed(e);
+    } finally {
+      state.writing.delete(id);
+      render();
+    }
+  }
+
+  function openForm(it) {
+    state.editing = it || null;
+    $("formTitle").textContent = it ? "「" + it.name + "」を編集" : "品目を追加";
+    $("fName").value = it ? it.name || "" : "";
+    $("fCat").value = it ? it.category || "" : (state.cat || "");
+    $("fQty").value = it ? qtyOf(it) : 0;
+    $("fUnit").value = it ? it.unit || "" : "個";
+    $("fMin").value = it ? num(it.min, 0) : 1;
+    $("fPlace").value = it ? it.place || "" : "";
+    $("fNote").value = it ? it.note || "" : "";
+    $("delBtn").hidden = !it;
+    $("delBtn").textContent = "削除";
+    delete $("delBtn").dataset.armed;
+    $("form").hidden = false;
+    $("form").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    $("fName").focus({ preventScroll: true });
+  }
+  function closeForm() { $("form").hidden = true; state.editing = null; }
+
+  async function save() {
+    const name = $("fName").value.trim();
+    if (!name) { toast("品名を入力してください"); $("fName").focus(); return; }
+    const body = {
+      name,
+      category: $("fCat").value.trim(),
+      qty: Math.max(0, num($("fQty").value)),
+      unit: $("fUnit").value.trim(),
+      min: Math.max(0, num($("fMin").value)),
+      place: $("fPlace").value.trim(),
+      note: $("fNote").value.trim(),
+      ...stamp(),
+    };
+    $("saveBtn").disabled = true;
+    try {
+      const col = state.db.collection("items");
+      if (state.editing) {
+        state.pending.delete(state.editing.id);
+        await col.doc(state.editing.id).set({ ...body, createdAt: state.editing.createdAt || body.updatedAt });
+        toast("「" + name + "」を更新しました");
+      } else {
+        await col.add({ ...body, createdAt: body.updatedAt });
+        toast("「" + name + "」を追加しました");
+      }
+      closeForm();
+    } catch (e) { writeFailed(e); }
+    finally { $("saveBtn").disabled = false; }
+  }
+
+  async function del() {
+    const b = $("delBtn");
+    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "本当に削除する"; return; }
+    const it = state.editing; if (!it) return;
+    try {
+      await state.db.collection("items").doc(it.id).delete();
+      toast("「" + it.name + "」を削除しました");
+      closeForm();
+    } catch (e) { writeFailed(e); }
+  }
+
+  async function loadSamples() {
+    const t = Date.now();
+    const samples = [
+      { name: "トイレットペーパー（サンプル）", category: "日用品", qty: 12, unit: "ロール", min: 6, place: "倉庫 棚A" },
+      { name: "ゴミ袋 45L（サンプル）", category: "日用品", qty: 2, unit: "袋", min: 3, place: "倉庫 棚A" },
+      { name: "コピー用紙 A4（サンプル）", category: "事務用品", qty: 0, unit: "箱", min: 1, place: "事務所" },
+      { name: "ボールペン 黒（サンプル）", category: "事務用品", qty: 25, unit: "本", min: 10, place: "事務所 引き出し" },
+      { name: "ペットボトル水 500ml（サンプル）", category: "飲料", qty: 18, unit: "本", min: 24, place: "倉庫 床" },
+    ];
+    try {
+      for (const s of samples) await state.db.collection("items").add({ ...s, note: "", createdAt: t, ...stamp() });
+      toast("サンプルを5件追加しました。不要になったら各品目の「編集」から削除できます");
+    } catch (e) { writeFailed(e); }
+  }
+
+  async function copyText() {
+    const text = shareText();
+    try { await navigator.clipboard.writeText(text); toast("コピーしました。LINEのトークに貼り付けてください"); }
+    catch {
+      const r = document.createRange(); r.selectNodeContents($("preview"));
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      toast("文面を選択しました。長押し（Ctrl+C）でコピーしてください");
+    }
+  }
+
+  // ---------- names ----------
+  async function resolveNames() {
+    if (!state.user || !state.user.profiles) return;
+    const ids = [...new Set(state.items.map((i) => i.updatedBy).filter(Boolean))].filter((id) => !(id in state.names));
+    if (!ids.length) return;
+    try {
+      const ps = await state.user.profiles(ids);
+      let changed = false;
+      for (const id of ids) { const n = (ps && ps[id] && ps[id].name) || ""; state.names[id] = n; if (n) changed = true; }
+      if (changed) render();
+    } catch {}
+  }
+
+  // ---------- events ----------
+  document.querySelectorAll(".tile").forEach((t) => t.addEventListener("click", () => { state.filter = t.dataset.filter; render(); }));
+  $("q").addEventListener("input", (e) => { state.q = e.target.value; render(); });
+  $("cat").addEventListener("change", (e) => { state.cat = e.target.value; render(); });
+  $("addBtn").addEventListener("click", () => openForm(null));
+  $("cancelBtn").addEventListener("click", closeForm);
+  $("saveBtn").addEventListener("click", save);
+  $("delBtn").addEventListener("click", del);
+  $("form").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); save(); } });
+  $("modeNeed").addEventListener("click", () => { state.mode = "need"; renderPreview(); });
+  $("modeAll").addEventListener("click", () => { state.mode = "all"; renderPreview(); });
+  $("copyBtn").addEventListener("click", copyText);
+  renderPreview();
+
+  // ---------- boot ----------
+  async function boot() {
+    const C = window.claude;
+    if (!C || !C.use) {
+      state.loaded = true; state.canWrite = false;
+      setConn("err", "オフライン表示");
+      banner("共有データに接続できません。claude.ai にサインインした状態で開いてください。");
+      $("addBtn").hidden = true; render(); return;
+    }
+    const [db, user] = await Promise.all([C.use("db"), C.use("user").catch(() => null)]);
+    state.user = user;
+    if (!db) {
+      state.loaded = true; state.canWrite = false;
+      setConn("err", "未接続");
+      banner("共有データを読み込めません。claude.ai にサインインしてから開き直してください。");
+      $("addBtn").hidden = true; render(); return;
+    }
+    state.db = db;
+    if (user) {
+      try { state.me = await user.id(); } catch {}
+      try {
+        const can = await user.can("data.write");
+        if (can === false) {
+          state.canWrite = false;
+          banner("閲覧のみで開いています。編集するには、作成者から「編集者」として招待してもらってください。");
+        }
+      } catch {}
+    }
+    $("addBtn").hidden = !state.canWrite;
+
+    const loadTimer = setTimeout(() => {
+      setConn("err", "接続待ち");
+      if (!state.loaded) { state.loaded = true; render(); }
+      banner(state.items.length ? "最新の状態を取得できていない可能性があります。" : "在庫データにまだ接続できません。通信状況を確認してください。");
+    }, 10000);
+
+    db.collection("items").onSnapshot((snap) => {
+      state.items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      state.loaded = true;
+      if (!snap.metadata.fromCache) {
+        clearTimeout(loadTimer);
+        setConn("live", "リアルタイム同期中");
+        if ($("banner").textContent.startsWith("最新") || $("banner").textContent.startsWith("在庫データ")) banner("");
+      }
+      if (state.editing && !state.items.some((i) => i.id === state.editing.id)) closeForm();
+      render();
+      resolveNames();
+    }, (err) => {
+      clearTimeout(loadTimer);
+      state.loaded = true;
+      setConn("err", "同期が止まりました");
+      banner("同期が止まりました。ページを開き直してください。");
+      render();
+    });
+  }
+  boot();
+})();
+</script>
