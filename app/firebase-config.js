@@ -1,11 +1,9 @@
-// Firebase の「ウェブアプリの設定」をここに貼り付けます。
-// 例：
-// window.FIREBASE_CONFIG = {
-//   apiKey: "AIza....",
-//   authDomain: "your-project.firebaseapp.com",
-//   projectId: "your-project",
-//   storageBucket: "your-project.appspot.com",
-//   messagingSenderId: "1234567890",
-//   appId: "1:1234567890:web:abcdef",
-// };
-window.FIREBASE_CONFIG = null;
+// Firebase の「ウェブアプリの設定」（公開して使う前提の値。パスワードではありません）
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAqIjJoqYbETluLF4lGOSNkT42_CnHovo4",
+  authDomain: "zaiko-kanri-2c686.firebaseapp.com",
+  projectId: "zaiko-kanri-2c686",
+  storageBucket: "zaiko-kanri-2c686.firebasestorage.app",
+  messagingSenderId: "597634855005",
+  appId: "1:597634855005:web:2c0c50a1cfa392e2111db4",
+};
