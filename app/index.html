@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
 <style>
-/* Layout: one column ledger — summary strip, toolbar, item rows with big +/- steppers, share panel at the end */
+/* Layout: one column ledger — summary strip, toolbar, item rows with big +/- steppers, name setting at the end */
 :root {
   --bg: #eef2f1;
   --surface: #ffffff;
@@ -30,7 +30,6 @@
   --warn-bg: #fbf1df;
   --bad: #b8400e;
   --bad-bg: #fbe6dc;
-  --share: #138a43;
   --c-in: #2f6fa8;
   --c-out: #c8761a;
   --font-body: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
@@ -40,13 +39,13 @@
   :root:not([data-theme="light"]) {
     --bg: #111816; --surface: #19221f; --sunk: #222d2a; --ink: #e6eeeb; --muted: #97a7a2;
     --line: #2e3b37; --accent: #6fb0e0; --accent-ink: #0d1a24; --ok: #63c58a; --warn: #e3a648;
-    --warn-bg: #3a2c14; --bad: #f08a5d; --bad-bg: #3d2117; --share: #3ccf74; --c-in: #3f8ed8; --c-out: #c4802a; color-scheme: dark;
+    --warn-bg: #3a2c14; --bad: #f08a5d; --bad-bg: #3d2117; --c-in: #3f8ed8; --c-out: #c4802a; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #111816; --surface: #19221f; --sunk: #222d2a; --ink: #e6eeeb; --muted: #97a7a2;
   --line: #2e3b37; --accent: #6fb0e0; --accent-ink: #0d1a24; --ok: #63c58a; --warn: #e3a648;
-  --warn-bg: #3a2c14; --bad: #f08a5d; --bad-bg: #3d2117; --share: #3ccf74; --c-in: #3f8ed8; --c-out: #c4802a; color-scheme: dark;
+  --warn-bg: #3a2c14; --bad: #f08a5d; --bad-bg: #3d2117; --c-in: #3f8ed8; --c-out: #c4802a; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 :root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
@@ -99,7 +98,6 @@ button { font: inherit; cursor: pointer; }
 }
 .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
 .btn.danger { color: var(--bad); border-color: var(--bad); }
-.btn.share { background: var(--share); color: #fff; border-color: var(--share); font-weight: 700; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 
 .list { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
@@ -146,10 +144,6 @@ button { font: inherit; cursor: pointer; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: .8rem; color: var(--muted); min-width: 0; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .actions .spacer { flex: 1; }
-.preview {
-  white-space: pre-wrap; font-size: .85rem; background: var(--sunk); border-radius: 8px; padding: 12px;
-  max-height: 260px; overflow: auto; overflow-wrap: anywhere; margin: 0; font-family: var(--font-body);
-}
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; background: var(--surface); color: var(--ink); padding: 7px 12px; font-size: .85rem; }
 .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
@@ -297,20 +291,6 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
     <div class="empty"><strong>在庫を読み込んでいます…</strong></div>
   </section>
 
-  <section class="panel" aria-labelledby="shareTitle">
-    <h2 id="shareTitle">グループLINEに送る</h2>
-    <div class="seg" role="group" aria-label="送る内容">
-      <button id="modeNeed" aria-pressed="true">補充が必要なものだけ</button>
-      <button id="modeAll" aria-pressed="false">全品目</button>
-    </div>
-    <pre class="preview" id="preview"></pre>
-    <div class="actions">
-      <button class="btn" id="copyBtn">文面をコピー</button>
-      <a class="btn share" id="lineBtn" href="#" target="_blank" rel="noopener">LINEで送る</a>
-    </div>
-    <p class="note">「LINEで送る」でLINEが開き、送り先のトークを選べます。開かないときは文面をコピーしてトークに貼り付けてください。</p>
-  </section>
-
   <section class="panel" aria-labelledby="meTitle">
     <h2 id="meTitle">あなたの名前</h2>
     <div class="me">
@@ -330,7 +310,7 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
 (() => {
   const $ = (id) => document.getElementById(id);
   const state = {
-    items: [], filter: "all", q: "", cat: "", mode: "need",
+    items: [], filter: "all", q: "", cat: "",
     db: null, me: null, myName: "", canWrite: true, editing: null,
     pending: new Map(), timers: new Map(), writing: new Set(),
     view: "list", hist: [], histMine: new Map(), histChain: new Map(), hDays: 30, hItem: "",
@@ -421,7 +401,6 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
         if (n) { n.value = keep.value; n.focus({ preventScroll: true }); try { n.setSelectionRange(keep.s, keep.e); } catch {} }
       }
     }
-    renderPreview();
   }
 
   function rowFor(it) {
@@ -455,36 +434,6 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
         state.canWrite ? el("button", { "aria-label": it.name + "を1増やす", onclick: () => bump(it, 1) }, "＋") : null,
       ),
     );
-  }
-
-  function shareText() {
-    const d = new Date();
-    const head = "【在庫状況 " + (d.getMonth() + 1) + "/" + d.getDate() + " " + d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0") + "】";
-    const sorted = [...state.items].sort((a, b) => String(a.name).localeCompare(String(b.name), "ja"));
-    const line = (i) => "・" + i.name + "　" + qtyOf(i) + (i.unit || "");
-    const out = sorted.filter((i) => statusOf(i) === "out");
-    const low = sorted.filter((i) => statusOf(i) === "low");
-    const lines = [head];
-    if (state.mode === "need") {
-      if (!out.length && !low.length) lines.push("補充が必要なものはありません 👍");
-      if (out.length) lines.push("", "■ 在庫切れ", ...out.map(line));
-      if (low.length) lines.push("", "■ 残りわずか", ...low.map((i) => line(i) + "（目安 " + num(i.min) + "）"));
-    } else {
-      if (!sorted.length) lines.push("登録されている品目はありません");
-      const byCat = new Map();
-      for (const i of sorted) { const c = (i.category || "その他").trim() || "その他"; if (!byCat.has(c)) byCat.set(c, []); byCat.get(c).push(i); }
-      for (const [c, arr] of [...byCat].sort((a, b) => a[0].localeCompare(b[0], "ja"))) {
-        lines.push("", "■ " + c, ...arr.map((i) => line(i) + (statusOf(i) === "out" ? " ⚠在庫切れ" : statusOf(i) === "low" ? " ⚠残りわずか" : "")));
-      }
-    }
-    return lines.join("\n");
-  }
-  function renderPreview() {
-    const text = shareText();
-    $("preview").textContent = text;
-    $("lineBtn").href = "https://line.me/R/share?text=" + encodeURIComponent(text);
-    $("modeNeed").setAttribute("aria-pressed", String(state.mode === "need"));
-    $("modeAll").setAttribute("aria-pressed", String(state.mode === "all"));
   }
 
   // ---------- writes ----------
@@ -853,16 +802,6 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
     } catch (e) { writeFailed(e); }
   }
 
-  async function copyText() {
-    const text = shareText();
-    try { await navigator.clipboard.writeText(text); toast("コピーしました。LINEのトークに貼り付けてください"); }
-    catch {
-      const r = document.createRange(); r.selectNodeContents($("preview"));
-      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
-      toast("文面を選択しました。長押し（Ctrl+C）でコピーしてください");
-    }
-  }
-
   // ---------- this device: id and display name ----------
   const ls = {
     get(k) { try { return localStorage.getItem(k); } catch { return null; } },
@@ -889,9 +828,6 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
   $("saveBtn").addEventListener("click", save);
   $("delBtn").addEventListener("click", del);
   $("form").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); save(); } });
-  $("modeNeed").addEventListener("click", () => { state.mode = "need"; renderPreview(); });
-  $("modeAll").addEventListener("click", () => { state.mode = "all"; renderPreview(); });
-  $("copyBtn").addEventListener("click", copyText);
   $("tabList").addEventListener("click", () => { location.hash = "list"; setView("list"); });
   $("tabHist").addEventListener("click", () => { location.hash = "history"; setView("hist"); });
   window.addEventListener("hashchange", () => setView(location.hash === "#history" ? "hist" : "list"));
@@ -902,7 +838,6 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
     if (window.innerWidth === lastW) return;
     lastW = window.innerWidth; clearTimeout(rz); rz = setTimeout(renderHist, 150);
   });
-  renderPreview();
   setView(location.hash === "#history" ? "hist" : "list");
 
   // ---------- boot ----------
