@@ -215,7 +215,17 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
 .daytbl .nm { text-align: left; width: 100%; }
 .dayhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .dayhead input { width: auto; padding: 6px 10px; }
-.ask { border-color: var(--accent); border-width: 2px; }
+.modal {
+  position: fixed; inset: 0; z-index: 30; background: rgba(10, 20, 18, .5);
+  display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+}
+.sheet { background: var(--surface); border-radius: 14px; padding: 20px; width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 12px; }
+.sheet h2 { margin: 0; font-size: 1.15rem; text-wrap: balance; }
+.sheet input { font-size: 1.1rem; padding: 12px; }
+.btn.big { padding: 11px 26px; font-size: 1.05rem; }
+.err { margin: 0; font-size: .88rem; color: var(--bad); font-weight: 700; }
+.unsaved { margin: 0; font-size: .88rem; color: var(--warn); font-weight: 700; }
 .me { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .me input { flex: 1 1 160px; width: auto; min-width: 0; }
 </style>
@@ -272,14 +282,6 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
   </section>
 
   <div id="viewList" class="view" role="tabpanel" aria-labelledby="tabList">
-  <section class="panel ask" id="nameAsk" hidden aria-labelledby="askTitle">
-    <h2 id="askTitle">はじめに名前を入れてください</h2>
-    <p class="note">数を変えた人として、全員の画面に表示されます。この端末で一度入れれば次からは不要です。</p>
-    <div class="me">
-      <input id="askName" maxlength="20" placeholder="例：田中" autocomplete="nickname" list="knownNames" aria-label="あなたの名前">
-      <button class="btn primary" id="askSave">決定</button>
-    </div>
-  </section>
   <section class="summary" aria-label="在庫の概要">
     <button class="tile" data-filter="all" aria-pressed="true"><span class="k">品目</span><span class="v" id="sumAll">–</span></button>
     <button class="tile warn" data-filter="low" aria-pressed="false"><span class="k">残りわずか</span><span class="v" id="sumLow">–</span></button>
@@ -322,9 +324,22 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
       <input id="meName" maxlength="20" placeholder="例：田中" autocomplete="nickname" list="knownNames" aria-label="あなたの名前">
       <button class="btn" id="meSave">保存</button>
     </div>
+    <p class="unsaved" id="meUnsaved" hidden>まだ保存されていません。「保存」を押してください。</p>
     <p class="note">数を変えた人として、全員の画面に表示されます。名前の設定は端末ごとです（iPhoneはSafariとホーム画面のアプリで別々）。</p>
     <datalist id="knownNames"></datalist>
   </section>
+  </div>
+</div>
+<div class="modal" id="nameModal" hidden role="dialog" aria-modal="true" aria-labelledby="nmTitle">
+  <div class="sheet">
+    <h2 id="nmTitle">あなたの名前を保存してください</h2>
+    <p class="note">名前を入れて「保存」を押してください。在庫の数を変えた人として、全員の画面に表示されます。この端末で一度保存すれば、次からは聞かれません。</p>
+    <input id="askName" maxlength="20" placeholder="例：田中" autocomplete="nickname" list="knownNames" aria-label="あなたの名前" enterkeyhint="done">
+    <p class="err" id="askErr" hidden>名前を入れてから「保存」を押してください。</p>
+    <div class="actions">
+      <button class="btn" id="askLater">あとで</button>
+      <button class="btn primary big" id="askSave">保存</button>
+    </div>
   </div>
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
@@ -1018,23 +1033,31 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
     const names = [...new Set([...deviceNames().values()])].sort((a, b) => a.localeCompare(b, "ja"));
     $("knownNames").replaceChildren(...names.map((n) => el("option", { value: n })));
   }
+  function openNameModal() {
+    $("askErr").hidden = true;
+    $("nameModal").hidden = false;
+    setTimeout(() => $("askName").focus(), 50);
+  }
+  function closeNameModal() { $("nameModal").hidden = true; }
   function needName() {
     if (state.myName) return false;
-    $("nameAsk").hidden = false;
-    if (state.view !== "list") { location.hash = "list"; setView("list"); }
-    $("nameAsk").scrollIntoView({ block: "start" });
-    $("askName").focus({ preventScroll: true });
-    toast("先に名前を入れてください");
+    openNameModal();
     return true;
+  }
+  function markUnsaved() {
+    const dirty = $("meName").value.trim() !== state.myName;
+    $("meUnsaved").hidden = !dirty;
+    $("meSave").classList.toggle("primary", dirty);
   }
   async function setName(v) {
     const n = String(v || "").trim().slice(0, 20);
-    if (!n) { toast("名前を入れてください"); return; }
+    if (!n) { if (!$("nameModal").hidden) { $("askErr").hidden = false; $("askName").focus(); } else toast("名前を入れてから「保存」を押してください"); return; }
     state.myName = n;
     ls.set("zaiko.name", n);
     $("meName").value = n; $("askName").value = n;
-    $("nameAsk").hidden = true;
-    toast("名前を「" + n + "」にしました");
+    closeNameModal();
+    markUnsaved();
+    toast("名前「" + n + "」を保存しました");
     render();
     // put the name on items this device changed while it had no name
     if (state.db) {
@@ -1047,7 +1070,12 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
   $("meName").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); setName($("meName").value); } });
   $("askSave").addEventListener("click", () => setName($("askName").value));
   $("askName").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); setName($("askName").value); } });
-  $("nameAsk").hidden = !!state.myName;
+  $("askLater").addEventListener("click", closeNameModal);
+  $("nameModal").addEventListener("click", (e) => { if (e.target === $("nameModal")) closeNameModal(); });
+  $("meName").addEventListener("input", markUnsaved);
+  $("meName").addEventListener("blur", () => { if ($("meName").value.trim() && $("meName").value.trim() !== state.myName) toast("名前はまだ保存されていません。「保存」を押してください"); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("nameModal").hidden) closeNameModal(); });
+  if (!state.myName) openNameModal();
 
   // ---------- events ----------
   document.querySelectorAll(".tile").forEach((t) => t.addEventListener("click", () => { state.filter = t.dataset.filter; render(); }));

@@ -1,6 +1,6 @@
 // アプリの画面を端末に保存して、電波が弱くても開けるようにします。
 // 在庫データ自体は Firebase が端末に保存・同期します。
-const CACHE = "zaiko-v6";
+const CACHE = "zaiko-v7";
 const SHELL = ["./", "index.html", "firebase-config.js", "manifest.webmanifest", "icon.svg", "icon-192.png"];
 
 self.addEventListener("install", (e) => {
