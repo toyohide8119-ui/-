@@ -32,6 +32,16 @@ service cloud.firestore {
         && (d.by == null || str(d.by, 40));
     }
 
+    function validEvent(d) {
+      return d.keys().hasOnly(['date', 'itemId', 'name', 'unit', 'delta', 'qty', 'at', 'by', 'byName'])
+        && str(d.date, 10) && str(d.itemId, 40) && str(d.name, 60) && str(d.unit, 10)
+        && d.delta is number && d.delta >= -1000000 && d.delta <= 1000000
+        && qty(d.qty)
+        && d.at is number
+        && (d.by == null || str(d.by, 40))
+        && str(d.byName, 20);
+    }
+
     match /items/{id} {
       allow read: if true;
       allow create, update: if validItem(request.resource.data);
@@ -42,6 +52,12 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if validHist(request.resource.data);
       allow delete: if false;
+    }
+
+    match /events/{id} {
+      allow read: if true;
+      allow create: if validEvent(request.resource.data);
+      allow update, delete: if false;
     }
   }
 }

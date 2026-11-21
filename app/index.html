@@ -208,6 +208,8 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
 @media (prefers-reduced-motion: no-preference) {
   .row { transition: background-color .2s; }
 }
+.dayhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.dayhead input { width: auto; padding: 6px 10px; }
 .me { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .me input { flex: 1 1 160px; width: auto; min-width: 0; }
 </style>
@@ -243,6 +245,15 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
       <h2 id="hBarsTitle">日ごとの増減</h2>
       <div class="legend"><span><i style="background: var(--c-in)"></i>増えた（入荷・補充）</span><span><i style="background: var(--c-out)"></i>減った（使用・出荷）</span></div>
       <div class="chart" id="hBars"></div>
+    </section>
+    <section class="panel" id="dayPanel" aria-labelledby="dayTitle">
+      <div class="dayhead">
+        <h2 id="dayTitle">今日の動き</h2>
+        <input type="date" id="evDate" aria-label="日付を選ぶ">
+      </div>
+      <p class="note">グラフの棒をタップすると、その日の動きに切り替わります。</p>
+      <div class="chart" id="dayChart"></div>
+      <div class="tbl-wrap" id="dayTbl"></div>
     </section>
     <section class="panel" id="hLinePanel" hidden>
       <h2>在庫数の推移</h2>
@@ -314,6 +325,8 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
     db: null, me: null, myName: "", canWrite: true, editing: null,
     pending: new Map(), timers: new Map(), writing: new Set(),
     view: "list", hist: [], histMine: new Map(), histChain: new Map(), hDays: 30, hItem: "",
+    histLoaded: false, histSubDays: 0, histUnsub: null,
+    ev: [], evLoaded: false, evDate: "", evSubDate: "", evUnsub: null,
   };
 
   // ---------- helpers ----------
@@ -548,17 +561,167 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
   function logChange(item, oldQ, newQ) {
     const delta = num(newQ) - num(oldQ);
     if (!delta || !state.db || !item || !item.id) return;
-    const date = dk(new Date());
-    const id = date + "_" + item.id + "_" + (state.me || "anon");
-    const mine = state.histMine.get(id);
-    const h = state.hist.find((x) => x.id === id);
-    let cur = mine && (!h || mine.at >= num(h.at)) ? mine : h ? { inc: num(h.inc), dec: num(h.dec) } : { inc: 0, dec: 0 };
-    const at = Date.now();
-    cur = { inc: cur.inc + Math.max(0, delta), dec: cur.dec + Math.max(0, -delta), at };
-    state.histMine.set(id, cur);
-    const body = { date, itemId: item.id, name: item.name || "", unit: item.unit || "", inc: cur.inc, dec: cur.dec, endQty: num(newQ), at, by: state.me || null };
+    const now = new Date(), date = dk(now), at = now.getTime();
+    const me = state.me || "anon";
+
+    // 1) one record per change (for the within-a-day view)
+    state.db.collection("events").doc(at + "_" + me).set({
+      date, itemId: item.id, name: item.name || "", unit: item.unit || "",
+      delta, qty: num(newQ), at, by: state.me || null, byName: state.myName || "",
+    }).catch(() => {});
+
+    // 2) running daily totals per item per person (for the day-by-day view)
+    const id = date + "_" + item.id + "_" + me;
+    const ref = state.db.collection("history").doc(id);
     const prev = state.histChain.get(id) || Promise.resolve();
-    state.histChain.set(id, prev.then(() => state.db.collection("history").doc(id).set(body)).catch(() => {}));
+    state.histChain.set(id, prev.then(async () => {
+      // start from whichever tally is newer: this screen's own, or the stored one
+      let base = state.histMine.get(id) || { inc: 0, dec: 0, at: 0 };
+      try {
+        const s = await ref.get();
+        const d = s.exists ? s.data() : null;
+        if (d && num(d.at) > base.at) base = { inc: num(d.inc), dec: num(d.dec), at: num(d.at) };
+      } catch {}
+      const cur = { inc: base.inc + Math.max(0, delta), dec: base.dec + Math.max(0, -delta), at };
+      state.histMine.set(id, cur);
+      await w(ref.set({ date, itemId: item.id, name: item.name || "", unit: item.unit || "", inc: cur.inc, dec: cur.dec, endQty: num(newQ), at, by: state.me || null }));
+    }).catch(() => {}));
+  }
+
+  // Subscribe only to what the open screen needs (keeps reads inside the free tier).
+  function subscribeHist() {
+    if (!state.db || state.histSubDays === state.hDays) return;
+    if (state.histUnsub) state.histUnsub();
+    state.histSubDays = state.hDays;
+    state.histLoaded = false;
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (state.hDays - 1));
+    state.histUnsub = state.db.collection("history").where("date", ">=", dk(d)).onSnapshot((snap) => {
+      state.hist = snap.docs.map((x) => ({ id: x.id, ...x.data() }));
+      state.histLoaded = true;
+      renderHist();
+    }, () => {});
+  }
+  function subscribeEvents() {
+    if (!state.db || state.evSubDate === state.evDate) return;
+    if (state.evUnsub) state.evUnsub();
+    state.evSubDate = state.evDate;
+    state.evLoaded = false;
+    state.evUnsub = state.db.collection("events").where("date", "==", state.evDate).onSnapshot((snap) => {
+      state.ev = snap.docs.map((x) => ({ id: x.id, ...x.data() })).sort((a, b) => num(a.at) - num(b.at));
+      state.evLoaded = true;
+      renderDay();
+    }, () => { state.evLoaded = true; renderDay(); });
+  }
+
+  const hm = (ms) => { const d = new Date(ms); return d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0"); };
+  const signed = (n) => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n);
+
+  function drawDay(wrap, evs, unit, min) {
+    const W = Math.max(300, Math.round(wrap.clientWidth || 600)), H = 220, ml = 44, mr = 40, mt = 14, mb = 26;
+    const pw = W - ml - mr, ph = H - mt - mb;
+    const [y0, m0, d0] = state.evDate.split("-").map(Number);
+    const dayStart = new Date(y0, m0 - 1, d0).getTime(), HR = 3600e3;
+    const isToday = state.evDate === dk(new Date());
+    // time window: an hour around the first and last change, at least 4 hours
+    let h1 = Math.max(0, Math.floor((evs[0].at - dayStart) / HR) - 1);
+    let h2 = Math.min(24, Math.ceil((evs[evs.length - 1].at - dayStart) / HR) + 1);
+    if (isToday) h2 = Math.min(24, Math.max(h2, Math.ceil((Date.now() - dayStart) / HR)));
+    if (h2 - h1 < 4) { h2 = Math.min(24, h1 + 4); h1 = Math.max(0, h2 - 4); }
+    const t0 = dayStart + h1 * HR, t1 = dayStart + h2 * HR;
+    const x = (t) => ml + ((t - t0) / (t1 - t0)) * pw;
+    const startQ = Math.max(0, num(evs[0].qty) - num(evs[0].delta));
+    const qs = [startQ, ...evs.map((e) => num(e.qty))];
+    const step = niceStep(Math.max(1, ...qs, min), 3);
+    const top = Math.max(step, Math.ceil(Math.max(1, ...qs, min) / step) * step);
+    const y = (v) => mt + ((top - v) / top) * ph;
+    let s = "";
+    for (let v = 0; v <= top + 1e-9; v += step) {
+      const yy = y(v).toFixed(1);
+      s += '<line class="' + (v === 0 ? "zero" : "grid") + '" x1="' + ml + '" x2="' + (W - mr) + '" y1="' + yy + '" y2="' + yy + '"></line>';
+      s += '<text x="' + (ml - 6) + '" y="' + yy + '" dy="4" text-anchor="end">' + v + "</text>";
+    }
+    if (min > 0 && min <= top) {
+      const yy = y(min).toFixed(1);
+      s += '<line class="ref" x1="' + ml + '" x2="' + (W - mr) + '" y1="' + yy + '" y2="' + yy + '"></line>';
+      s += '<text x="' + (ml + 4) + '" y="' + yy + '" dy="-4">目安 ' + min + "</text>";
+    }
+    const span = h2 - h1, every = span <= 6 ? 1 : span <= 12 ? 2 : span <= 18 ? 3 : 4;
+    for (let h = h1; h <= h2; h++) {
+      if ((h - h1) % every) continue;
+      const anchor = h === h1 ? "start" : h === h2 ? "end" : "middle";
+      s += '<text x="' + x(dayStart + h * HR).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + anchor + '">' + h + ":00</text>";
+    }
+    // step line: flat until each change, then jump to the new count
+    const tEnd = isToday ? Math.min(t1, Date.now()) : t1;
+    let d = "M" + x(t0).toFixed(1) + "," + y(startQ).toFixed(1);
+    evs.forEach((e) => { d += "H" + x(e.at).toFixed(1) + "V" + y(num(e.qty)).toFixed(1); });
+    d += "H" + x(Math.max(tEnd, evs[evs.length - 1].at)).toFixed(1);
+    s += '<path class="ln" d="' + d + '"></path>';
+    evs.forEach((e, i) => {
+      s += '<circle class="dotm" data-i="' + i + '" cx="' + x(e.at).toFixed(1) + '" cy="' + y(num(e.qty)).toFixed(1) + '" r="5"></circle>';
+    });
+    const last = evs[evs.length - 1];
+    s += '<text class="lbl" x="' + (x(Math.max(tEnd, last.at)) + 8).toFixed(1) + '" y="' + y(num(last.qty)).toFixed(1) + '" dy="4">' + num(last.qty) + "</text>";
+    wrap.innerHTML = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="1日の在庫数の変化のグラフ。詳しい時刻と数は下の表にあります">' + s + "</svg>";
+
+    // hover / tap: nearest change
+    const svg = wrap.querySelector("svg");
+    const tip = el("div", { class: "tip", hidden: "" });
+    wrap.append(tip);
+    const u = unit ? esc(unit) : "";
+    const show = (ev) => {
+      const r = svg.getBoundingClientRect();
+      const sx = (ev.clientX - r.left) * (W / r.width);
+      let bi = 0, bd = Infinity;
+      evs.forEach((e, i) => { const dd = Math.abs(x(e.at) - sx); if (dd < bd) { bd = dd; bi = i; } });
+      const e = evs[bi];
+      svg.querySelectorAll(".dotm").forEach((c) => c.setAttribute("r", c.dataset.i == bi ? "7" : "5"));
+      tip.innerHTML = "<b>" + hm(e.at) + "</b>　" + signed(num(e.delta)) + u + "<br>変更後 " + num(e.qty) + u + (e.byName ? "<br>" + esc(e.byName) : "");
+      tip.hidden = false;
+      const cx = x(e.at) * (r.width / W), tw = tip.offsetWidth;
+      tip.style.left = Math.max(0, Math.min(wrap.clientWidth - tw, cx - tw / 2)) + "px";
+      tip.style.top = (-tip.offsetHeight - 6) + "px";
+    };
+    svg.addEventListener("pointermove", show);
+    svg.addEventListener("pointerdown", show);
+    svg.addEventListener("pointerleave", () => { tip.hidden = true; svg.querySelectorAll(".dotm").forEach((c) => c.setAttribute("r", "5")); });
+  }
+
+  function renderDay() {
+    if (state.view !== "hist") return;
+    subscribeEvents();
+    const today = dk(new Date());
+    $("evDate").max = today;
+    if ($("evDate").value !== state.evDate) $("evDate").value = state.evDate;
+    const single = state.hItem || null;
+    const item = single ? state.items.find((i) => i.id === single) : null;
+    const evs = state.ev.filter((e) => !single || e.itemId === single);
+    const unit = single ? (item ? item.unit : (evs[0] && evs[0].unit)) || "" : "";
+    const label = state.evDate === today ? "今日" : dLabel(state.evDate, true);
+    $("dayTitle").textContent = label + "の動き" + (single ? "（" + (item ? item.name : (evs[0] && evs[0].name) || "") + "）" : "");
+
+    const chart = $("dayChart"), tbl = $("dayTbl");
+    if (!state.evLoaded) { chart.replaceChildren(); tbl.replaceChildren(el("p", { class: "note" }, "読み込んでいます…")); return; }
+    if (!evs.length) {
+      chart.replaceChildren();
+      tbl.replaceChildren(el("div", { class: "empty" },
+        el("strong", {}, label + "の変更はありません"),
+        el("span", {}, "数を変えるたびに、時刻・増減・変更後の数・変えた人がここに記録されます（1日の動きの記録は 11/21 から始まりました）。")));
+      return;
+    }
+    if (single) drawDay(chart, evs, unit, item ? num(item.min) : 0);
+    else chart.replaceChildren(el("p", { class: "note" }, "上で品目を選ぶと、その品目の1日の数の変化をグラフで見られます。"));
+
+    const td = (v, unitTxt) => el("td", {}, String(v), unitTxt ? el("span", { class: "unit" }, unitTxt) : null);
+    const rows = [...evs].reverse().map((e) => el("tr", {},
+      el("td", {}, hm(e.at)),
+      single ? null : el("td", { style: "text-align:left;white-space:normal" }, e.name || ""),
+      td(signed(num(e.delta)), e.unit),
+      td(num(e.qty), e.unit),
+      el("td", { class: "muted" }, e.byName || "—")));
+    tbl.replaceChildren(el("table", {},
+      el("thead", {}, el("tr", {}, el("th", {}, "時刻"), single ? null : el("th", { style: "text-align:left" }, "品目"), el("th", {}, "増減"), el("th", {}, "変更後"), el("th", {}, "変えた人"))),
+      el("tbody", {}, ...rows)));
   }
 
   function niceStep(max, count) {
@@ -576,7 +739,7 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
     }
     return s;
   }
-  function attachHover(wrap, svg, W, ml, band, n, tipHtml) {
+  function attachHover(wrap, svg, W, ml, band, n, tipHtml, onPick) {
     const tip = el("div", { class: "tip", hidden: "" });
     wrap.append(tip);
     const hl = svg.querySelector(".hl");
@@ -597,9 +760,14 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
     svg.addEventListener("pointermove", show);
     svg.addEventListener("pointerdown", show);
     svg.addEventListener("pointerleave", hide);
+    if (onPick) svg.addEventListener("click", (ev) => {
+      const r = svg.getBoundingClientRect();
+      const i = Math.floor(((ev.clientX - r.left) * (W / r.width) - ml) / band);
+      if (i >= 0 && i < n) onPick(i);
+    });
   }
 
-  function drawBars(wrap, keys, days, unit, single) {
+  function drawBars(wrap, keys, days, unit, single, onPick) {
     const W = Math.max(300, Math.round(wrap.clientWidth || 600)), H = 220, ml = 44, mr = 6, mt = 10, mb = 26;
     const n = keys.length, pw = W - ml - mr, ph = H - mt - mb, band = pw / n;
     const maxI = Math.max(0, ...days.map((d) => d.inc)), maxD = Math.max(0, ...days.map((d) => d.dec));
@@ -634,8 +802,9 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
       return "<b>" + dLabel(keys[i], true) + "</b><br>" +
         '<i style="background: var(--c-in)"></i>増えた +' + d.inc + u + "<br>" +
         '<i style="background: var(--c-out)"></i>減った −' + d.dec + u +
-        (single && d.end != null ? "<br>その日の終わり " + d.end + u : "");
-    });
+        (single && d.end != null ? "<br>その日の終わり " + d.end + u : "") +
+        (onPick ? '<br><span style="opacity:.75">タップでこの日の動きへ</span>' : "");
+    }, onPick);
   }
 
   function drawLine(wrap, keys, vals, min, unit) {
@@ -675,6 +844,7 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
 
   function renderHist() {
     if (state.view !== "hist") return;
+    subscribeHist();
     const nDays = state.hDays;
     document.querySelectorAll("#hDays button").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.days) === nDays)));
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -719,7 +889,11 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
       $("hBars").replaceChildren(el("div", { class: "empty" },
         el("strong", {}, "この期間の記録はまだありません"),
         el("span", {}, "在庫の数を変えると、その日の「増えた・減った」がここにたまっていきます。記録はこの画面を追加した日から始まります。")));
-    } else drawBars($("hBars"), keys, days, unit, !!single);
+    } else drawBars($("hBars"), keys, days, unit, !!single, (i) => {
+      state.evDate = keys[i];
+      renderDay();
+      $("dayPanel").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+    });
 
     // stock level line for one item
     $("hLinePanel").hidden = !single || !rows.length;
@@ -729,6 +903,8 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
       if (item) vals[vals.length - 1] = qtyOf(item);
       drawLine($("hLine"), keys, vals, item ? num(item.min) : 0, unit);
     }
+
+    renderDay();
 
     // table
     const tbl = $("hTbl");
@@ -833,6 +1009,8 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
   window.addEventListener("hashchange", () => setView(location.hash === "#history" ? "hist" : "list"));
   document.querySelectorAll("#hDays button").forEach((b) => b.addEventListener("click", () => { state.hDays = Number(b.dataset.days); renderHist(); }));
   $("hItem").addEventListener("change", (e) => { state.hItem = e.target.value; renderHist(); });
+  state.evDate = dk(new Date());
+  $("evDate").addEventListener("change", (e) => { if (/^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) { state.evDate = e.target.value; renderDay(); } });
   let rz, lastW = window.innerWidth;
   window.addEventListener("resize", () => {
     if (window.innerWidth === lastW) return;
@@ -881,11 +1059,7 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
       render();
     });
 
-    const since = dk(new Date(Date.now() - 95 * 864e5));
-    db.collection("history").where("date", ">=", since).onSnapshot((snap) => {
-      state.hist = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      renderHist();
-    }, () => {});
+    renderHist();
   }
   boot();
 
