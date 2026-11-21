@@ -208,6 +208,11 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
 @media (prefers-reduced-motion: no-preference) {
   .row { transition: background-color .2s; }
 }
+.daytbl { font-size: .9rem; }
+.daytbl th, .daytbl td { white-space: nowrap; padding-inline: 5px; }
+.daytbl td .unit { font-size: .75rem; margin-left: 1px; }
+.daytbl th:first-child, .daytbl td:first-child { min-width: 0; padding-left: 0; }
+.daytbl .nm { text-align: left; width: 100%; }
 .dayhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .dayhead input { width: auto; padding: 6px 10px; }
 .me { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -715,12 +720,12 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
     const td = (v, unitTxt) => el("td", {}, String(v), unitTxt ? el("span", { class: "unit" }, unitTxt) : null);
     const rows = [...evs].reverse().map((e) => el("tr", {},
       el("td", {}, hm(e.at)),
-      single ? null : el("td", { style: "text-align:left;white-space:normal" }, e.name || ""),
-      td(signed(num(e.delta)), e.unit),
+      single ? null : el("td", { class: "nm" }, e.name || ""),
+      td(signed(num(e.delta))),
       td(num(e.qty), e.unit),
       el("td", { class: "muted" }, e.byName || "—")));
-    tbl.replaceChildren(el("table", {},
-      el("thead", {}, el("tr", {}, el("th", {}, "時刻"), single ? null : el("th", { style: "text-align:left" }, "品目"), el("th", {}, "増減"), el("th", {}, "変更後"), el("th", {}, "変えた人"))),
+    tbl.replaceChildren(el("table", { class: "daytbl" },
+      el("thead", {}, el("tr", {}, el("th", {}, "時刻"), single ? null : el("th", { class: "nm" }, "品目"), el("th", {}, "増減"), el("th", {}, "変更後"), el("th", {}, "変えた人"))),
       el("tbody", {}, ...rows)));
   }
 
