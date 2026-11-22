@@ -83,6 +83,16 @@ h1 { font-size: 1.6rem; margin: 0; letter-spacing: .02em; text-wrap: balance; }
 .tile.bad .v { color: var(--bad); }
 
 .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+.groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.gbtn {
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px;
+  padding: 12px 8px; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0;
+}
+.gbtn b { font-size: 1.3rem; line-height: 1.2; overflow-wrap: anywhere; }
+.gbtn small { font-size: .78rem; color: var(--muted); }
+.gbtn small.alert { color: var(--warn); font-weight: 700; }
+.gbtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.gbtn[aria-pressed="true"] small { color: var(--accent-ink); opacity: .9; }
 .toolbar input, .toolbar select { flex: 1 1 160px; min-width: 0; }
 input, select, textarea {
   font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line);
@@ -213,6 +223,7 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
 .daytbl td .unit { font-size: .75rem; margin-left: 1px; }
 .daytbl th:first-child, .daytbl td:first-child { min-width: 0; padding-left: 0; }
 .daytbl .nm { text-align: left; width: 100%; }
+.fhint { font-size: .75rem; color: var(--muted); }
 .dayhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .dayhead input { width: auto; padding: 6px 10px; }
 .modal {
@@ -289,6 +300,8 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
     <button class="tile bad" data-filter="out" aria-pressed="false"><span class="k">在庫切れ</span><span class="v" id="sumOut">–</span></button>
   </section>
 
+  <nav class="groups" id="groups" aria-label="大分類" hidden></nav>
+
   <div class="toolbar">
     <input id="q" type="search" placeholder="品名・場所で検索" aria-label="検索">
     <select id="cat" aria-label="カテゴリ"><option value="">すべてのカテゴリ</option></select>
@@ -298,7 +311,7 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
   <section class="panel" id="form" hidden aria-labelledby="formTitle">
     <h2 id="formTitle">品目を追加</h2>
     <div class="grid2">
-      <label>品名 *<input id="fName" required maxlength="60" placeholder="例：トイレットペーパー"></label>
+      <label>品名 *<input id="fName" required maxlength="60" placeholder="例：MP【20㎏】"><span class="fhint">【 】の前の文字（MP・DRなど）が大分類のボタンになります</span></label>
       <label>カテゴリ<input id="fCat" maxlength="30" list="catList" placeholder="例：日用品"></label>
       <label>数量<input id="fQty" type="number" inputmode="decimal" min="0" step="1" value="0"></label>
       <label>単位<input id="fUnit" maxlength="10" placeholder="個・箱・本 など" value="個"></label>
@@ -353,7 +366,7 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
 (() => {
   const $ = (id) => document.getElementById(id);
   const state = {
-    items: [], filter: "all", q: "", cat: "",
+    items: [], filter: "all", q: "", cat: "", group: (() => { try { return localStorage.getItem("zaiko.group") || ""; } catch { return ""; } })(),
     db: null, me: null, myName: "", canWrite: true, editing: null,
     pending: new Map(), timers: new Map(), writing: new Set(),
     view: "list", hist: [], histMine: new Map(), histChain: new Map(), hDays: 30, hItem: "",
@@ -369,6 +382,8 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
     if (q <= num(it.min, 0)) return "low";
     return "ok";
   };
+  // big group = text before 【 (e.g. "MP【20㎏】13㎜" -> "MP"); names without 【 go to その他
+  const groupOf = (it) => { const n = String(it.name || ""); const k = n.indexOf("【"); return k > 0 ? n.slice(0, k).trim() || "その他" : "その他"; };
   const qtyOf = (it) => state.pending.has(it.id) ? state.pending.get(it.id) : num(it.qty);
   const fmtTime = (ms) => {
     if (!ms) return "";
@@ -408,6 +423,22 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
     $("sumOut").textContent = out;
     document.querySelectorAll(".tile").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.filter === state.filter)));
 
+    // big groups (the part of the name before 【 】), shown as buttons
+    const gmap = new Map();
+    items.forEach((i) => {
+      const g = groupOf(i), e = gmap.get(g) || { n: 0, need: 0 };
+      e.n++; if (statusOf(i) !== "ok") e.need++; gmap.set(g, e);
+    });
+    const groups = [...gmap].sort((a, b) => (a[0] === "その他") - (b[0] === "その他") || a[0].localeCompare(b[0], "ja"));
+    if (state.group && !gmap.has(state.group)) state.group = "";
+    const gbtn = (key, label, e) => el("button", {
+      class: "gbtn", "aria-pressed": String(state.group === key),
+      onclick: () => { state.group = key; try { localStorage.setItem("zaiko.group", key); } catch {} render(); },
+    }, el("b", {}, label), el("small", { class: e.need ? "alert" : "" }, e.n + "品目" + (e.need ? "・要補充" + e.need : "")));
+    $("groups").hidden = groups.length < 2;
+    $("groups").replaceChildren(gbtn("", "すべて", { n: items.length, need: items.filter((i) => statusOf(i) !== "ok").length }),
+      ...groups.map(([g, e]) => gbtn(g, g, e)));
+
     // categories
     const cats = [...new Set(items.map((i) => (i.category || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ja"));
     const sel = $("cat"); const cur = state.cat;
@@ -419,6 +450,7 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
     const q = state.q.trim().toLowerCase();
     const shown = items
       .filter((i) => state.filter === "all" || (state.filter === "low" ? statusOf(i) !== "ok" : statusOf(i) === "out"))
+      .filter((i) => !state.group || groupOf(i) === state.group)
       .filter((i) => !state.cat || (i.category || "") === state.cat)
       .filter((i) => !q || [i.name, i.place, i.category, i.note].join(" ").toLowerCase().includes(q))
       .sort((a, b) => {
