@@ -240,6 +240,48 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
 .unsaved { margin: 0; font-size: .88rem; color: var(--warn); font-weight: 700; }
 .me { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .me input { flex: 1 1 160px; width: auto; min-width: 0; }
+
+/* ---- compact input screen ---- */
+.wrap { gap: 12px; padding-block: 10px 40px; }
+header { align-items: center; }
+h1 { font-size: 1.2rem; }
+.tabs button { padding: 6px 12px; font-size: .95rem; }
+#viewList { gap: 10px; }
+.groups {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 4; background: var(--bg);
+  padding-block: 6px; margin-block: -6px; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 6px;
+}
+.gbtn { padding: 7px 6px; border-radius: 8px; }
+.gbtn b { font-size: 1.1rem; }
+.gbtn small { font-size: .7rem; }
+.toolbar { flex-wrap: nowrap; gap: 6px; }
+.toolbar input { flex: 1 1 auto; padding: 8px 10px; }
+.toolbar select { flex: 0 1 140px; padding: 8px; }
+.toolbar .btn { padding: 8px 10px; font-size: .9rem; }
+.btn.chip[aria-pressed="true"] { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); font-weight: 700; }
+.btn.small { padding: 5px 12px; font-size: .85rem; align-self: flex-start; }
+.row { padding: 6px 8px 6px 0; gap: 0 8px; }
+.row .name {
+  background: none; border: 0; padding: 4px 0; text-align: left; color: var(--ink); width: 100%;
+  font-size: 1.12rem; line-height: 1.3; gap: 6px; flex-wrap: nowrap; cursor: pointer;
+}
+.row .name .nm { min-width: 0; overflow-wrap: anywhere; }
+.row .pill { flex: none; font-size: .7rem; padding: 0 6px; }
+.detail { display: flex; flex-direction: column; gap: 4px; padding-bottom: 4px; }
+.detail .meta { font-size: .82rem; }
+.stepper { gap: 4px; }
+.stepper button { width: 40px; height: 40px; font-size: 1.35rem; }
+.qty { min-width: 0; display: flex; flex-direction: column; align-items: center; }
+.qtyIn { width: 76px; font-size: 1.45rem; padding: 3px 2px; }
+.qty b { font-size: 1.45rem; }
+.qty span { font-size: .7rem; line-height: 1.1; }
+@media (max-width: 460px) {
+  .row .name { font-size: 1.02rem; }
+  .stepper button { width: 38px; height: 38px; }
+  .qtyIn { width: 64px; font-size: 1.3rem; }
+  .qty b { font-size: 1.3rem; }
+  .toolbar .btn { padding: 8px 8px; }
+}
 </style>
 </head>
 <body>
@@ -247,7 +289,6 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
   <header>
     <div>
       <h1>みんなの在庫帳</h1>
-      <p class="sub">グループで同じ在庫を見て、増減をその場で記録</p>
     </div>
     <div class="conn"><span class="dot" id="connDot"></span><span id="connText">接続中…</span></div>
   </header>
@@ -294,7 +335,7 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
   </section>
 
   <div id="viewList" class="view" role="tabpanel" aria-labelledby="tabList">
-  <section class="summary" aria-label="在庫の概要">
+  <section class="summary" aria-label="在庫の概要" hidden>
     <button class="tile" data-filter="all" aria-pressed="true"><span class="k">品目</span><span class="v" id="sumAll">–</span></button>
     <button class="tile warn" data-filter="low" aria-pressed="false"><span class="k">残りわずか</span><span class="v" id="sumLow">–</span></button>
     <button class="tile bad" data-filter="out" aria-pressed="false"><span class="k">在庫切れ</span><span class="v" id="sumOut">–</span></button>
@@ -305,7 +346,8 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
   <div class="toolbar">
     <input id="q" type="search" placeholder="品名・場所で検索" aria-label="検索">
     <select id="cat" aria-label="カテゴリ"><option value="">すべてのカテゴリ</option></select>
-    <button class="btn primary" id="addBtn">＋ 品目を追加</button>
+    <button class="btn chip" id="needOnly" aria-pressed="false">要補充だけ</button>
+    <button class="btn primary" id="addBtn">＋追加</button>
   </div>
 
   <section class="panel" id="form" hidden aria-labelledby="formTitle">
@@ -366,6 +408,7 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
 (() => {
   const $ = (id) => document.getElementById(id);
   const state = {
+    open: new Set(),
     items: [], filter: "all", q: "", cat: "", group: (() => { try { return localStorage.getItem("zaiko.group") || ""; } catch { return ""; } })(),
     db: null, me: null, myName: "", canWrite: true, editing: null,
     pending: new Map(), timers: new Map(), writing: new Set(),
@@ -422,6 +465,7 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
     $("sumLow").textContent = low;
     $("sumOut").textContent = out;
     document.querySelectorAll(".tile").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.filter === state.filter)));
+    $("needOnly").setAttribute("aria-pressed", String(state.filter === "low"));
 
     // big groups (the part of the name before 【 】), shown as buttons
     const gmap = new Map();
@@ -444,6 +488,8 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
     const sel = $("cat"); const cur = state.cat;
     sel.replaceChildren(el("option", { value: "" }, "すべてのカテゴリ"), ...cats.map((c) => el("option", { value: c }, c)));
     sel.value = cats.includes(cur) ? cur : "";
+    if (cats.length < 2) { state.cat = ""; sel.value = ""; }
+    sel.hidden = cats.length < 2;
     $("catList").replaceChildren(...cats.map((c) => el("option", { value: c })));
 
     // rows
@@ -483,17 +529,21 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
   function rowFor(it) {
     const st = statusOf(it);
     const qty = qtyOf(it);
+    const open = state.open.has(it.id);
     const who = whoName(it.updatedBy, it.updatedByName);
     const metaBits = [it.category, it.place && "📍" + it.place].filter(Boolean).join("・");
     const updated = it.updatedAt ? "更新 " + fmtTime(it.updatedAt) + (who ? "（" + who + "）" : "") : "";
-    return el("div", { class: "row " + st },
+    const toggle = () => { if (state.open.has(it.id)) state.open.delete(it.id); else state.open.add(it.id); render(); };
+    return el("div", { class: "row " + st + (open ? " open" : "") },
       el("div", { class: "stripe", "aria-hidden": "true" }),
       el("div", { class: "info" },
-        el("div", { class: "name" }, it.name || "（名称なし）",
-          st === "out" ? el("span", { class: "pill out" }, "在庫切れ") : st === "low" ? el("span", { class: "pill low" }, "残りわずか") : null),
-        el("div", { class: "meta" }, [metaBits, updated].filter(Boolean).join("　")),
-        it.note ? el("div", { class: "meta" }, it.note) : null,
-        state.canWrite ? el("div", { class: "meta" }, el("button", { class: "edit", onclick: () => openForm(it) }, "編集")) : null,
+        el("button", { class: "name", "aria-expanded": String(open), onclick: toggle },
+          el("span", { class: "nm" }, it.name || "（名称なし）"),
+          st === "out" ? el("span", { class: "pill out" }, "切れ") : st === "low" ? el("span", { class: "pill low" }, "少") : null),
+        open ? el("div", { class: "detail" },
+          el("div", { class: "meta" }, [metaBits, updated].filter(Boolean).join("　") || "詳細なし"),
+          it.note ? el("div", { class: "meta" }, it.note) : null,
+          state.canWrite ? el("button", { class: "btn small", onclick: () => openForm(it) }, "編集・削除") : null) : null,
       ),
       el("div", { class: "stepper" },
         state.canWrite ? el("button", { "aria-label": it.name + "を1減らす", onclick: () => bump(it, -1), disabled: qty <= 0 ? "" : null }, "−") : null,
@@ -1113,6 +1163,7 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
 
   // ---------- events ----------
   document.querySelectorAll(".tile").forEach((t) => t.addEventListener("click", () => { state.filter = t.dataset.filter; render(); }));
+  $("needOnly").addEventListener("click", () => { state.filter = state.filter === "low" ? "all" : "low"; render(); });
   $("q").addEventListener("input", (e) => { state.q = e.target.value; render(); });
   $("cat").addEventListener("change", (e) => { state.cat = e.target.value; render(); });
   $("addBtn").addEventListener("click", () => openForm(null));
