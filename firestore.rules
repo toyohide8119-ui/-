@@ -42,6 +42,22 @@ service cloud.firestore {
         && str(d.byName, 20);
     }
 
+    function validPlan(d) {
+      return d.keys().hasOnly(['date', 'itemId', 'name', 'unit', 'kind', 'qty', 'memo', 'status',
+                               'createdAt', 'createdBy', 'createdByName', 'doneAt', 'doneBy', 'doneByName'])
+        && str(d.date, 10) && str(d.itemId, 40) && str(d.name, 60) && str(d.unit, 10)
+        && d.kind in ['out', 'make']
+        && qty(d.qty) && d.qty > 0
+        && str(d.memo, 60)
+        && d.status in ['open', 'done', 'cancel']
+        && d.createdAt is number
+        && (d.createdBy == null || str(d.createdBy, 40))
+        && str(d.createdByName, 20)
+        && (!('doneAt' in d) || d.doneAt is number)
+        && (!('doneBy' in d) || d.doneBy == null || str(d.doneBy, 40))
+        && (!('doneByName' in d) || str(d.doneByName, 20));
+    }
+
     match /items/{id} {
       allow read: if true;
       allow create, update: if validItem(request.resource.data);
@@ -52,6 +68,12 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if validHist(request.resource.data);
       allow delete: if false;
+    }
+
+    match /plans/{id} {
+      allow read: if true;
+      allow create, update: if validPlan(request.resource.data);
+      allow delete: if true;
     }
 
     match /events/{id} {
