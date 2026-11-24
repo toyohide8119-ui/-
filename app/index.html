@@ -311,6 +311,18 @@ h1 { font-size: 1.2rem; }
 .pact { grid-column: 1 / -1; display: flex; gap: 6px; justify-content: flex-end; }
 .btn.ghost { background: transparent; }
 #pItem { flex: 1 1 180px; width: auto; min-width: 0; }
+.pmemo-l { grid-column: 1 / -1; }
+#pSitesBox { display: grid; gap: 6px; }
+.sites-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: .8rem; color: var(--muted); }
+.linkbtn { background: none; border: 0; padding: 4px 2px; color: var(--accent); font-size: .85rem; cursor: pointer; text-decoration: underline; }
+.linkbtn[aria-pressed="true"] { font-weight: 700; }
+.sites { display: flex; flex-wrap: wrap; gap: 6px; max-height: 7.6em; overflow-y: auto; }
+.site { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 6px 12px; font-size: .9rem; cursor: pointer; max-width: 100%; }
+.site span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.site.del { border-color: var(--bad); color: var(--bad); }
+.site.del::after { content: "×"; font-weight: 700; }
+.sites .none { font-size: .8rem; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -379,7 +391,11 @@ h1 { font-size: 1.2rem; }
         <label>日付<input id="pDate" type="date"></label>
         <label>品目<select id="pFItem"></select></label>
         <label>数量<input id="pQty" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="例：50"></label>
-        <label>メモ（現場名・相手先など）<input id="pMemo" maxlength="60" placeholder="例：○○現場"></label>
+        <label class="pmemo-l"><span id="pMemoLbl">現場名・相手先</span><input id="pMemo" maxlength="60" autocomplete="off" placeholder="例：○○現場"></label>
+      </div>
+      <div id="pSitesBox" hidden>
+        <div class="sites-head"><span>前に入れた現場名・相手先（タップで入力）</span><button type="button" class="linkbtn" id="pSitesEdit" aria-pressed="false">整理</button></div>
+        <div class="sites" id="pSites"></div>
       </div>
       <div class="actions"><span class="spacer"></span><button class="btn" id="pCancel">キャンセル</button><button class="btn primary" id="pSave">登録</button></div>
     </section>
@@ -465,7 +481,7 @@ h1 { font-size: 1.2rem; }
   const $ = (id) => document.getElementById(id);
   const state = {
     open: new Set(),
-    plans: [], plansRecent: [], plansRecentSub: false, planItem: "", planKind: "out",
+    plans: [], plansRecent: [], plansRecentSub: false, sites: new Map(), sitesSub: false, sitesEdit: false, planItem: "", planKind: "out",
     items: [], filter: "all", q: "", cat: "", group: (() => { try { return localStorage.getItem("zaiko.group") || ""; } catch { return ""; } })(),
     db: null, me: null, myName: "", canWrite: true, editing: null,
     pending: new Map(), timers: new Map(), writing: new Set(),
@@ -1170,6 +1186,64 @@ h1 { font-size: 1.2rem; }
     }, () => {});
   }
 
+  // ---- 現場名・相手先のリスト（全員で共有） ----
+  function siteId(name) {
+    let h = 0x811c9dc5;
+    for (const c of name) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193) >>> 0; }
+    return "s" + h.toString(36) + "_" + [...name].length;
+  }
+  function subscribeSites() {
+    if (!state.db || state.sitesSub) return;
+    state.sitesSub = true;
+    state.db.collection("sites").onSnapshot((snap) => {
+      state.sites = new Map(snap.docs.map((d) => [d.data().name, d.data()]));
+      renderSites();
+    }, () => {});
+  }
+  function siteList() {
+    const m = new Map();
+    // 予定に入っている名前も候補にする（リスト保存前の分も拾う）
+    [...state.plans, ...state.plansRecent].forEach((p) => {
+      if (p.kind === "out" && p.memo) m.set(p.memo, Math.max(m.get(p.memo) || 0, p.createdAt || 0));
+    });
+    state.sites.forEach((d, name) => { if (name) m.set(name, Math.max(m.get(name) || 0, d.lastUsed || 0)); });
+    return [...m].filter(([name]) => !(state.sites.get(name) || {}).hidden).sort((a, b) => b[1] - a[1]).map(([n]) => n);
+  }
+  function renderSites() {
+    const box = $("pSitesBox");
+    if (!box || $("pForm").hidden) return;
+    box.hidden = state.planKind !== "out";
+    if (box.hidden) return;
+    const q = $("pMemo").value.trim();
+    let list = siteList();
+    if (q && !state.sitesEdit && !list.includes(q)) list = list.filter((n) => n.includes(q));
+    $("pSitesEdit").setAttribute("aria-pressed", String(state.sitesEdit));
+    $("pSitesEdit").textContent = state.sitesEdit ? "整理を終わる" : "整理";
+    const chips = list.slice(0, 40).map((n) => el("button", {
+      type: "button", class: "site" + (state.sitesEdit ? " del" : ""), title: n, "aria-pressed": String(!state.sitesEdit && n === q),
+      "aria-label": state.sitesEdit ? n + " をリストから消す" : n + " を入力",
+      onclick: () => state.sitesEdit ? hideSite(n) : pickSite(n),
+    }, el("span", {}, n)));
+    $("pSites").replaceChildren(...(chips.length ? chips : [el("span", { class: "none" },
+      q ? "一致する名前はありません（そのまま入力できます）" : "まだありません。一度入力すると、ここに出ます")]));
+  }
+  function pickSite(n) {
+    $("pMemo").value = n;
+    renderSites();
+    if (!$("pQty").value) $("pQty").focus();
+  }
+  function hideSite(n) {
+    state.sites.set(n, { ...(state.sites.get(n) || {}), name: n, hidden: true });
+    renderSites();
+    state.db.collection("sites").doc(siteId(n)).set({ name: n, lastUsed: Date.now(), hidden: true }).catch(() => {});
+    toast("「" + n + "」をリストから消しました（予定はそのままです）");
+  }
+  function rememberSite(n) {
+    if (!n || !state.db) return;
+    state.sites.set(n, { name: n, lastUsed: Date.now(), hidden: false });
+    state.db.collection("sites").doc(siteId(n)).set({ name: n, lastUsed: Date.now(), hidden: false }).catch(() => {});
+  }
+
   function openPlanForm() {
     if (needName()) return;
     $("pForm").hidden = false;
@@ -1177,12 +1251,18 @@ h1 { font-size: 1.2rem; }
     if (!$("pDate").value) $("pDate").value = dk(t);
     itemOptions($("pFItem"), false, state.planItem || $("pFItem").value);
     setPlanKind(state.planKind);
+    subscribeSites();
+    state.sitesEdit = false;
+    renderSites();
     $("pQty").focus();
   }
   function setPlanKind(k) {
     state.planKind = k;
     document.querySelectorAll("#pKind button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.kind === k)));
     $("pSave").textContent = KIND[k].label + "を登録";
+    $("pMemoLbl").textContent = k === "out" ? "現場名・相手先" : "メモ";
+    $("pMemo").placeholder = k === "out" ? "例：○○現場" : "例：○号機";
+    renderSites();
   }
   async function savePlan() {
     if (needName()) return;
@@ -1200,6 +1280,7 @@ h1 { font-size: 1.2rem; }
     $("pSave").disabled = true;
     try {
       await w(state.db.collection("plans").doc().set(body));
+      if (body.kind === "out") rememberSite(body.memo);
       toast(dLabel(date) + " " + it.name + " " + KIND[body.kind].short + " " + (body.kind === "out" ? "−" : "+") + qty + (it.unit || "") + " を登録しました");
       $("pQty").value = ""; $("pMemo").value = "";
       $("pForm").hidden = true;
@@ -1233,6 +1314,7 @@ h1 { font-size: 1.2rem; }
   }
 
   function renderPlans() {
+    renderSites();
     if (state.view !== "plan") return;
     subscribePlansRecent();
     itemOptions($("pItem"), true, state.planItem);
@@ -1414,6 +1496,8 @@ h1 { font-size: 1.2rem; }
   $("tabPlan").addEventListener("click", () => { location.hash = "plan"; setView("plan"); });
   $("pAddBtn").addEventListener("click", openPlanForm);
   $("pCancel").addEventListener("click", () => { $("pForm").hidden = true; });
+  $("pMemo").addEventListener("input", () => renderSites());
+  $("pSitesEdit").addEventListener("click", () => { state.sitesEdit = !state.sitesEdit; renderSites(); });
   $("pSave").addEventListener("click", savePlan);
   document.querySelectorAll("#pKind button").forEach((b) => b.addEventListener("click", () => setPlanKind(b.dataset.kind)));
   $("pItem").addEventListener("change", (e) => { state.planItem = e.target.value; renderPlans(); });
