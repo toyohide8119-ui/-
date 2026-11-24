@@ -311,18 +311,24 @@ h1 { font-size: 1.2rem; }
 .pact { grid-column: 1 / -1; display: flex; gap: 6px; justify-content: flex-end; }
 .btn.ghost { background: transparent; }
 #pItem { flex: 1 1 180px; width: auto; min-width: 0; }
-.pmemo-l { grid-column: 1 / -1; }
-#pSitesBox { display: grid; gap: 6px; }
-.sites-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: .8rem; color: var(--muted); }
-.linkbtn { background: none; border: 0; padding: 4px 2px; color: var(--accent); font-size: .85rem; cursor: pointer; text-decoration: underline; }
-.linkbtn[aria-pressed="true"] { font-weight: 700; }
-.sites { display: flex; flex-wrap: wrap; gap: 6px; max-height: 7.6em; overflow-y: auto; }
-.site { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 6px 12px; font-size: .9rem; cursor: pointer; max-width: 100%; }
+.pmemo-l { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.combo { position: relative; display: flex; }
+.combo input { flex: 1; min-width: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+#pDrop { flex: 0 0 48px; border: 1px solid var(--line); border-left: 0; background: var(--sunk); color: var(--ink); font-size: .9rem; cursor: pointer; border-radius: 0 8px 8px 0; }
+#pDrop[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); }
+.combo:has(#pDrop[hidden]) input { border-radius: 8px; }
+.dropdown { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); overflow: hidden; }
+.sites { max-height: 15.5em; overflow-y: auto; overscroll-behavior: contain; }
+.site { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); padding: 11px 14px; font-size: 1rem; text-align: left; cursor: pointer; }
 .site span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.site[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); font-weight: 700; }
-.site.del { border-color: var(--bad); color: var(--bad); }
-.site.del::after { content: "×"; font-weight: 700; }
-.sites .none { font-size: .8rem; color: var(--muted); }
+.site:hover, .site:focus-visible { background: var(--sunk); }
+.site[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.site.del { color: var(--bad); }
+.site.del::after { content: "消す ×"; font-size: .8rem; font-weight: 700; flex: none; }
+.sites .none { display: block; padding: 12px 14px; font-size: .85rem; color: var(--muted); }
+.sites-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 10px 4px 14px; background: var(--sunk); font-size: .75rem; color: var(--muted); }
+.linkbtn { background: none; border: 0; padding: 6px 4px; color: var(--accent); font-size: .85rem; cursor: pointer; text-decoration: underline; }
+.linkbtn[aria-pressed="true"] { font-weight: 700; }
 </style>
 </head>
 <body>
@@ -391,11 +397,17 @@ h1 { font-size: 1.2rem; }
         <label>日付<input id="pDate" type="date"></label>
         <label>品目<select id="pFItem"></select></label>
         <label>数量<input id="pQty" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="例：50"></label>
-        <label class="pmemo-l"><span id="pMemoLbl">現場名・相手先</span><input id="pMemo" maxlength="60" autocomplete="off" placeholder="例：○○現場"></label>
-      </div>
-      <div id="pSitesBox" hidden>
-        <div class="sites-head"><span>前に入れた現場名・相手先（タップで入力）</span><button type="button" class="linkbtn" id="pSitesEdit" aria-pressed="false">整理</button></div>
-        <div class="sites" id="pSites"></div>
+        <div class="pmemo-l">
+          <label for="pMemo" id="pMemoLbl">現場名・相手先</label>
+          <div class="combo" id="pCombo">
+            <input id="pMemo" maxlength="60" autocomplete="off" placeholder="入力するか ▼ から選ぶ" role="combobox" aria-autocomplete="list" aria-controls="pSites" aria-expanded="false">
+            <button type="button" id="pDrop" aria-label="リストから選ぶ" aria-expanded="false" hidden>▼</button>
+            <div class="dropdown" id="pSitesBox" hidden>
+              <div class="sites" id="pSites" role="listbox" aria-labelledby="pMemoLbl"></div>
+              <div class="sites-foot"><span id="pSitesNote"></span><button type="button" class="linkbtn" id="pSitesEdit" aria-pressed="false">整理</button></div>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="actions"><span class="spacer"></span><button class="btn" id="pCancel">キャンセル</button><button class="btn primary" id="pSave">登録</button></div>
     </section>
@@ -481,7 +493,7 @@ h1 { font-size: 1.2rem; }
   const $ = (id) => document.getElementById(id);
   const state = {
     open: new Set(),
-    plans: [], plansRecent: [], plansRecentSub: false, sites: new Map(), sitesSub: false, sitesEdit: false, planItem: "", planKind: "out",
+    plans: [], plansRecent: [], plansRecentSub: false, sites: new Map(), sitesSub: false, sitesEdit: false, sitesOpen: false, planItem: "", planKind: "out",
     items: [], filter: "all", q: "", cat: "", group: (() => { try { return localStorage.getItem("zaiko.group") || ""; } catch { return ""; } })(),
     db: null, me: null, myName: "", canWrite: true, editing: null,
     pending: new Map(), timers: new Map(), writing: new Set(),
@@ -1207,29 +1219,46 @@ h1 { font-size: 1.2rem; }
       if (p.kind === "out" && p.memo) m.set(p.memo, Math.max(m.get(p.memo) || 0, p.createdAt || 0));
     });
     state.sites.forEach((d, name) => { if (name) m.set(name, Math.max(m.get(name) || 0, d.lastUsed || 0)); });
-    return [...m].filter(([name]) => !(state.sites.get(name) || {}).hidden).sort((a, b) => b[1] - a[1]).map(([n]) => n);
+    return [...m].filter(([name]) => !(state.sites.get(name) || {}).hidden).map(([n]) => n).sort(jaCmp);
   }
+  // あいうえお順（ひらがな・カタカナは同じ扱い、漢字は日本語の辞書順）
+  const jaColl = new Intl.Collator("ja", { sensitivity: "base", numeric: true });
+  function jaCmp(a, b) { return jaColl.compare(a, b); }
   function renderSites() {
     const box = $("pSitesBox");
     if (!box || $("pForm").hidden) return;
-    box.hidden = state.planKind !== "out";
-    if (box.hidden) return;
+    const isOut = state.planKind === "out";
+    $("pDrop").hidden = !isOut;
+    if (!isOut) state.sitesOpen = false;
+    box.hidden = !state.sitesOpen;
+    $("pDrop").setAttribute("aria-expanded", String(state.sitesOpen));
+    $("pMemo").setAttribute("aria-expanded", String(state.sitesOpen));
+    if (!state.sitesOpen) return;
     const q = $("pMemo").value.trim();
-    let list = siteList();
-    if (q && !state.sitesEdit && !list.includes(q)) list = list.filter((n) => n.includes(q));
+    const all = siteList();
+    let list = all;
+    if (q && state.sitesFilter && !state.sitesEdit && !all.includes(q)) list = all.filter((n) => n.includes(q));
     $("pSitesEdit").setAttribute("aria-pressed", String(state.sitesEdit));
     $("pSitesEdit").textContent = state.sitesEdit ? "整理を終わる" : "整理";
-    const chips = list.slice(0, 40).map((n) => el("button", {
-      type: "button", class: "site" + (state.sitesEdit ? " del" : ""), title: n, "aria-pressed": String(!state.sitesEdit && n === q),
-      "aria-label": state.sitesEdit ? n + " をリストから消す" : n + " を入力",
+    $("pSitesNote").textContent = state.sitesEdit ? "消す名前をタップ（予定はそのまま）" : list.length + "件・あいうえお順";
+    const rows = list.map((n) => el("button", {
+      type: "button", role: "option", class: "site" + (state.sitesEdit ? " del" : ""), title: n,
+      "aria-selected": String(!state.sitesEdit && n === q),
       onclick: () => state.sitesEdit ? hideSite(n) : pickSite(n),
     }, el("span", {}, n)));
-    $("pSites").replaceChildren(...(chips.length ? chips : [el("span", { class: "none" },
-      q ? "一致する名前はありません（そのまま入力できます）" : "まだありません。一度入力すると、ここに出ます")]));
+    $("pSites").replaceChildren(...(rows.length ? rows : [el("span", { class: "none" },
+      q ? "一致する名前はありません。このまま登録すると、リストに追加されます" : "まだありません。一度入力して登録すると、ここに出ます")]));
+    const sel = $("pSites").querySelector('[aria-selected="true"]');
+    if (sel) sel.scrollIntoView({ block: "nearest" });
+  }
+  function openSites(open) {
+    state.sitesOpen = open; state.sitesFilter = false;
+    if (!open) state.sitesEdit = false;
+    renderSites();
   }
   function pickSite(n) {
     $("pMemo").value = n;
-    renderSites();
+    openSites(false);
     if (!$("pQty").value) $("pQty").focus();
   }
   function hideSite(n) {
@@ -1252,7 +1281,7 @@ h1 { font-size: 1.2rem; }
     itemOptions($("pFItem"), false, state.planItem || $("pFItem").value);
     setPlanKind(state.planKind);
     subscribeSites();
-    state.sitesEdit = false;
+    state.sitesEdit = false; state.sitesOpen = false;
     renderSites();
     $("pQty").focus();
   }
@@ -1261,7 +1290,7 @@ h1 { font-size: 1.2rem; }
     document.querySelectorAll("#pKind button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.kind === k)));
     $("pSave").textContent = KIND[k].label + "を登録";
     $("pMemoLbl").textContent = k === "out" ? "現場名・相手先" : "メモ";
-    $("pMemo").placeholder = k === "out" ? "例：○○現場" : "例：○号機";
+    $("pMemo").placeholder = k === "out" ? "入力するか ▼ から選ぶ" : "例：○号機";
     renderSites();
   }
   async function savePlan() {
@@ -1495,9 +1524,30 @@ h1 { font-size: 1.2rem; }
   window.addEventListener("hashchange", () => setView(viewFromHash()));
   $("tabPlan").addEventListener("click", () => { location.hash = "plan"; setView("plan"); });
   $("pAddBtn").addEventListener("click", openPlanForm);
-  $("pCancel").addEventListener("click", () => { $("pForm").hidden = true; });
-  $("pMemo").addEventListener("input", () => renderSites());
+  $("pCancel").addEventListener("click", () => { $("pForm").hidden = true; openSites(false); });
+  $("pMemo").addEventListener("input", () => {
+    // 入力中は一致する名前があるときだけリストを開く（エクセルの入力候補のように）
+    const q = $("pMemo").value.trim();
+    if (state.planKind === "out") { state.sitesEdit = false; state.sitesOpen = !!q && siteList().some((n) => n.includes(q) && n !== q); state.sitesFilter = true; }
+    renderSites();
+  });
+  $("pMemo").addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && state.sitesOpen) { e.preventDefault(); openSites(false); }
+    if (e.key === "ArrowDown" && state.planKind === "out") {
+      e.preventDefault();
+      if (!state.sitesOpen) openSites(true);
+      const f = $("pSites").querySelector(".site"); if (f) f.focus();
+    }
+  });
+  $("pSites").addEventListener("keydown", (e) => {
+    const items = [...$("pSites").querySelectorAll(".site")]; const i = items.indexOf(document.activeElement);
+    if (e.key === "ArrowDown" && i < items.length - 1) { e.preventDefault(); items[i + 1].focus(); }
+    if (e.key === "ArrowUp") { e.preventDefault(); (i > 0 ? items[i - 1] : $("pMemo")).focus(); }
+    if (e.key === "Escape") { e.preventDefault(); openSites(false); $("pMemo").focus(); }
+  });
+  $("pDrop").addEventListener("click", () => { openSites(!state.sitesOpen); if (!state.sitesOpen) $("pMemo").focus(); });
   $("pSitesEdit").addEventListener("click", () => { state.sitesEdit = !state.sitesEdit; renderSites(); });
+  document.addEventListener("pointerdown", (e) => { if (state.sitesOpen && !$("pCombo").contains(e.target)) openSites(false); });
   $("pSave").addEventListener("click", savePlan);
   document.querySelectorAll("#pKind button").forEach((b) => b.addEventListener("click", () => setPlanKind(b.dataset.kind)));
   $("pItem").addEventListener("change", (e) => { state.planItem = e.target.value; renderPlans(); });
