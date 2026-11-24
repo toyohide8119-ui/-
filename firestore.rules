@@ -59,10 +59,11 @@ service cloud.firestore {
     }
 
     function validSite(d) {
-      return d.keys().hasOnly(['name', 'lastUsed', 'hidden'])
+      return d.keys().hasOnly(['name', 'lastUsed', 'hidden', 'yomi'])
         && d.name is string && d.name.size() > 0 && d.name.size() <= 60
         && d.lastUsed is number
-        && d.hidden is bool;
+        && d.hidden is bool
+        && (!('yomi' in d) || str(d.yomi, 60));
     }
 
     match /sites/{id} {

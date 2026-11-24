@@ -321,13 +321,20 @@ h1 { font-size: 1.2rem; }
 .sites { max-height: 15.5em; overflow-y: auto; overscroll-behavior: contain; }
 .site { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); padding: 11px 14px; font-size: 1rem; text-align: left; cursor: pointer; }
 .site span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site small { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .75rem; color: var(--muted); }
+.site small.noyomi { color: var(--warn); }
+.site[aria-selected="true"] small { color: inherit; opacity: .85; }
+.site.edit { cursor: default; padding-block: 7px; }
+.site.edit:hover { background: transparent; }
+.eact { display: flex; gap: 6px; flex: none; max-width: 60%; }
+.btn.mini { padding: 5px 9px; font-size: .78rem; min-height: 0; max-width: 11em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn.mini.bad { color: var(--bad); border-color: var(--bad); }
+.kana-h { position: sticky; top: 0; padding: 3px 14px; font-size: .72rem; font-weight: 700; color: var(--muted); background: var(--sunk); border-bottom: 1px solid var(--line); }
 .site:hover, .site:focus-visible { background: var(--sunk); }
 .site[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
-.site.del { color: var(--bad); }
-.site.del::after { content: "消す ×"; font-size: .8rem; font-weight: 700; flex: none; }
 .sites .none { display: block; padding: 12px 14px; font-size: .85rem; color: var(--muted); }
 .sites-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 10px 4px 14px; background: var(--sunk); font-size: .75rem; color: var(--muted); }
-.linkbtn { background: none; border: 0; padding: 6px 4px; color: var(--accent); font-size: .85rem; cursor: pointer; text-decoration: underline; }
+.linkbtn { white-space: nowrap; flex: none; background: none; border: 0; padding: 6px 4px; color: var(--accent); font-size: .85rem; cursor: pointer; text-decoration: underline; }
 .linkbtn[aria-pressed="true"] { font-weight: 700; }
 </style>
 </head>
@@ -408,6 +415,7 @@ h1 { font-size: 1.2rem; }
             </div>
           </div>
         </div>
+        <label class="pmemo-l" id="pYomiWrap" hidden>よみ（ひらがな・並び順に使います）<input id="pYomi" maxlength="60" autocomplete="off" placeholder="例：おおぐちけんせつ"></label>
       </div>
       <div class="actions"><span class="spacer"></span><button class="btn" id="pCancel">キャンセル</button><button class="btn primary" id="pSave">登録</button></div>
     </section>
@@ -1219,7 +1227,29 @@ h1 { font-size: 1.2rem; }
       if (p.kind === "out" && p.memo) m.set(p.memo, Math.max(m.get(p.memo) || 0, p.createdAt || 0));
     });
     state.sites.forEach((d, name) => { if (name) m.set(name, Math.max(m.get(name) || 0, d.lastUsed || 0)); });
-    return [...m].filter(([name]) => !(state.sites.get(name) || {}).hidden).map(([n]) => n).sort(jaCmp);
+    return [...m].filter(([name]) => !(state.sites.get(name) || {}).hidden).map(([n]) => n)
+      .sort((a, b) => jaCmp(sortKey(a), sortKey(b)) || jaCmp(a, b));
+  }
+  const KANA_ONLY = /^[\u3040-\u30ff\u30fc\s・ー0-9０-９A-Za-zＡ-Ｚａ-ｚ\-－()（）]+$/;
+  function needsYomi(n) { return !!n && !KANA_ONLY.test(n); }
+  function yomiOf(n) { return ((state.sites.get(n) || {}).yomi || "").trim(); }
+  function sortKey(n) { return yomiOf(n) || n; }
+  function toHira(s) { return String(s).replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60)); }
+  const GYO = ["あ", "か", "さ", "た", "な", "は", "ま", "や", "ら", "わ"];
+  function gyoOf(n) {
+    const c = toHira(sortKey(n)).charAt(0);
+    if (!/[\u3041-\u3096]/.test(c)) return /[\u3400-\u9fff]/.test(c) ? "漢字（よみ未設定）" : "記号・英数字";
+    let g = GYO[0];
+    for (const h of GYO) if (jaColl.compare(c, h) >= 0) g = h;
+    return g + "行";
+  }
+  function syncYomiField(fromPick) {
+    const n = $("pMemo").value.trim();
+    const show = state.planKind === "out" && needsYomi(n);
+    $("pYomiWrap").hidden = !show;
+    if (!show) { $("pYomi").value = ""; state.yomiTouched = false; return; }
+    const known = yomiOf(n);
+    if (fromPick || (known && !state.yomiTouched)) { $("pYomi").value = known; state.yomiTouched = false; }
   }
   // あいうえお順（ひらがな・カタカナは同じ扱い、漢字は日本語の辞書順）
   const jaColl = new Intl.Collator("ja", { sensitivity: "base", numeric: true });
@@ -1240,12 +1270,26 @@ h1 { font-size: 1.2rem; }
     if (q && state.sitesFilter && !state.sitesEdit && !all.includes(q)) list = all.filter((n) => n.includes(q));
     $("pSitesEdit").setAttribute("aria-pressed", String(state.sitesEdit));
     $("pSitesEdit").textContent = state.sitesEdit ? "整理を終わる" : "整理";
-    $("pSitesNote").textContent = state.sitesEdit ? "消す名前をタップ（予定はそのまま）" : list.length + "件・あいうえお順";
-    const rows = list.map((n) => el("button", {
-      type: "button", role: "option", class: "site" + (state.sitesEdit ? " del" : ""), title: n,
-      "aria-selected": String(!state.sitesEdit && n === q),
-      onclick: () => state.sitesEdit ? hideSite(n) : pickSite(n),
-    }, el("span", {}, n)));
+    $("pSitesNote").textContent = state.sitesEdit ? "予定には影響しません" : list.length + "件・あいうえお順";
+    const rows = [];
+    let lastG = "";
+    list.forEach((n) => {
+      const g = gyoOf(n);
+      if (g !== lastG && list.length > 6) { rows.push(el("div", { class: "kana-h", role: "presentation" }, g)); lastG = g; }
+      const y = yomiOf(n);
+      if (state.sitesEdit) {
+        rows.push(el("div", { class: "site edit" }, el("span", {}, n),
+          el("span", { class: "eact" },
+            el("button", { type: "button", class: "btn mini", onclick: () => editYomi(n) }, y ? "よみ：" + y : "よみを入れる"),
+            el("button", { type: "button", class: "btn mini bad", onclick: () => hideSite(n) }, "消す"))));
+        return;
+      }
+      rows.push(el("button", {
+        type: "button", role: "option", class: "site", title: n,
+        "aria-selected": String(!state.sitesEdit && n === q),
+        onclick: () => state.sitesEdit ? hideSite(n) : pickSite(n),
+      }, el("span", {}, n), y ? el("small", {}, y) : !/^[\u3041-\u30ff]/.test(n) && needsYomi(n) ? el("small", { class: "noyomi" }, "よみ未設定") : null));
+    });
     $("pSites").replaceChildren(...(rows.length ? rows : [el("span", { class: "none" },
       q ? "一致する名前はありません。このまま登録すると、リストに追加されます" : "まだありません。一度入力して登録すると、ここに出ます")]));
     const sel = $("pSites").querySelector('[aria-selected="true"]');
@@ -1258,19 +1302,34 @@ h1 { font-size: 1.2rem; }
   }
   function pickSite(n) {
     $("pMemo").value = n;
+    syncYomiField(true);
     openSites(false);
     if (!$("pQty").value) $("pQty").focus();
+  }
+  function editYomi(n) {
+    const cur = yomiOf(n);
+    const v = window.prompt("「" + n + "」のよみ（ひらがな）", cur);
+    if (v == null) return;
+    const y = toHira(v.trim()).slice(0, 60);
+    state.sites.set(n, { ...(state.sites.get(n) || {}), name: n, yomi: y });
+    renderSites();
+    const body = { name: n, lastUsed: (state.sites.get(n) || {}).lastUsed || Date.now(), hidden: false, yomi: y };
+    state.db.collection("sites").doc(siteId(n)).set(body, { merge: true }).catch(() => toast("保存できませんでした。ルールの貼り替えを確認してください"));
+    toast(y ? "「" + n + "」のよみを「" + y + "」にしました" : "「" + n + "」のよみを消しました");
   }
   function hideSite(n) {
     state.sites.set(n, { ...(state.sites.get(n) || {}), name: n, hidden: true });
     renderSites();
-    state.db.collection("sites").doc(siteId(n)).set({ name: n, lastUsed: Date.now(), hidden: true }).catch(() => {});
+    state.db.collection("sites").doc(siteId(n)).set({ name: n, lastUsed: Date.now(), hidden: true }, { merge: true }).catch(() => {});
     toast("「" + n + "」をリストから消しました（予定はそのままです）");
   }
-  function rememberSite(n) {
+  function rememberSite(n, yomi) {
     if (!n || !state.db) return;
-    state.sites.set(n, { name: n, lastUsed: Date.now(), hidden: false });
-    state.db.collection("sites").doc(siteId(n)).set({ name: n, lastUsed: Date.now(), hidden: false }).catch(() => {});
+    const body = { name: n, lastUsed: Date.now(), hidden: false };
+    yomi = toHira(String(yomi || "").trim()).slice(0, 60);
+    if (yomi && needsYomi(n)) body.yomi = yomi;
+    state.sites.set(n, { ...(state.sites.get(n) || {}), ...body });
+    state.db.collection("sites").doc(siteId(n)).set(body, { merge: true }).catch(() => {});
   }
 
   function openPlanForm() {
@@ -1290,6 +1349,7 @@ h1 { font-size: 1.2rem; }
     document.querySelectorAll("#pKind button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.kind === k)));
     $("pSave").textContent = KIND[k].label + "を登録";
     $("pMemoLbl").textContent = k === "out" ? "現場名・相手先" : "メモ";
+    syncYomiField(false);
     $("pMemo").placeholder = k === "out" ? "入力するか ▼ から選ぶ" : "例：○号機";
     renderSites();
   }
@@ -1309,9 +1369,9 @@ h1 { font-size: 1.2rem; }
     $("pSave").disabled = true;
     try {
       await w(state.db.collection("plans").doc().set(body));
-      if (body.kind === "out") rememberSite(body.memo);
+      if (body.kind === "out") rememberSite(body.memo, $("pYomi").value);
       toast(dLabel(date) + " " + it.name + " " + KIND[body.kind].short + " " + (body.kind === "out" ? "−" : "+") + qty + (it.unit || "") + " を登録しました");
-      $("pQty").value = ""; $("pMemo").value = "";
+      $("pQty").value = ""; $("pMemo").value = ""; $("pYomi").value = ""; $("pYomiWrap").hidden = true; state.yomiTouched = false; state.imeYomi = "";
       $("pForm").hidden = true;
       state.planItem = it.id;
       renderPlans();
@@ -1525,7 +1585,20 @@ h1 { font-size: 1.2rem; }
   $("tabPlan").addEventListener("click", () => { location.hash = "plan"; setView("plan"); });
   $("pAddBtn").addEventListener("click", openPlanForm);
   $("pCancel").addEventListener("click", () => { $("pForm").hidden = true; openSites(false); });
-  $("pMemo").addEventListener("input", () => {
+  // IME の変換前のひらがなを拾って、よみ欄に自動で入れる（エクセルのふりがなと同じ考え方）
+  let compKana = "";
+  $("pMemo").addEventListener("compositionstart", () => { compKana = ""; });
+  $("pMemo").addEventListener("compositionupdate", (e) => { if (/^[\u3041-\u3096ー]+$/.test(e.data || "")) compKana = e.data; });
+  $("pMemo").addEventListener("compositionend", (e) => {
+    const d = e.data || "";
+    state.imeYomi = (state.imeYomi || "") + (/^[\u3041-\u30ffー]+$/.test(d) ? toHira(d) : compKana);
+    compKana = "";
+    if (!state.yomiTouched && !yomiOf($("pMemo").value.trim())) { syncYomiField(false); if (!$("pYomiWrap").hidden) $("pYomi").value = state.imeYomi; }
+  });
+  $("pYomi").addEventListener("input", () => { state.yomiTouched = true; });
+  $("pMemo").addEventListener("input", (e) => {
+    if (!$("pMemo").value.trim()) state.imeYomi = "";
+    syncYomiField(false);
     // 入力中は一致する名前があるときだけリストを開く（エクセルの入力候補のように）
     const q = $("pMemo").value.trim();
     if (state.planKind === "out") { state.sitesEdit = false; state.sitesOpen = !!q && siteList().some((n) => n.includes(q) && n !== q); state.sitesFilter = true; }
