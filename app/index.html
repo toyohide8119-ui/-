@@ -205,6 +205,8 @@ th:first-child, td:first-child { text-align: left; white-space: normal; min-widt
 [hidden] { display: none !important; }
 thead th { border-top: 0; font-size: .8rem; color: var(--muted); font-weight: 500; }
 /* 品目ごとの増減：品目名を1行に（行の高さをそろえる） */
+.aggtbl td:first-child button { white-space: nowrap !important; display: inline; }
+.ver { text-align: center; font-size: .72rem; color: var(--muted); margin: 4px 0 0; }
 .aggtbl th, .aggtbl td { padding-inline: 4px; }
 .aggtbl th:first-child, .aggtbl td:first-child { white-space: nowrap; min-width: 0; padding-left: 0; }
 .aggtbl th:last-child, .aggtbl td:last-child { padding-right: 0; }
@@ -564,6 +566,7 @@ h1 { font-size: 1.2rem; }
     <datalist id="knownNames"></datalist>
   </section>
   </div>
+  <p class="ver">画面の版：25</p>
 </div>
 <div class="modal" id="nameModal" hidden role="dialog" aria-modal="true" aria-labelledby="nmTitle">
   <div class="sheet">
