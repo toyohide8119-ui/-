@@ -204,6 +204,11 @@ th, td { padding: 9px 10px; border-top: 1px solid var(--line); text-align: right
 th:first-child, td:first-child { text-align: left; white-space: normal; min-width: 8em; }
 [hidden] { display: none !important; }
 thead th { border-top: 0; font-size: .8rem; color: var(--muted); font-weight: 500; }
+/* 品目ごとの増減：品目名を1行に（行の高さをそろえる） */
+.aggtbl th, .aggtbl td { padding-inline: 4px; }
+.aggtbl th:first-child, .aggtbl td:first-child { white-space: nowrap; min-width: 0; padding-left: 0; }
+.aggtbl th:last-child, .aggtbl td:last-child { padding-right: 0; }
+@media (max-width: 420px) { .aggtbl { font-size: .82rem; } .aggtbl thead th { font-size: .7rem; } .aggtbl th, .aggtbl td { padding-inline: 3px; } }
 td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
 .muted { color: var(--muted); }
 @media (max-width: 460px) {
@@ -1277,15 +1282,19 @@ h1 { font-size: 1.2rem; }
         if (ia && ib) return itemCmp(ia, ib);
         return (ia ? -1 : 0) + (ib ? 1 : 0) || a[1].name.localeCompare(b[1].name, "ja");
       });
+      // 単位が全部同じなら、数字の横には付けず見出しにまとめる（スマホで1行に収めるため）
+      const units = new Set(list.map(([id, a]) => { const it = itemById(id); return it ? it.unit || "" : a.unit || ""; }));
+      const oneUnit = units.size === 1 ? [...units][0] : null;
       const body = list.map(([id, a]) => {
         const it = state.items.find((i) => i.id === id);
-        const un = it ? it.unit || "" : a.unit;
+        const un = oneUnit !== null ? "" : it ? it.unit || "" : a.unit;
         const n2 = a.inc - a.dec;
-        const nameCell = el("td", {}, el("button", { class: "edit", style: "background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;font:inherit;text-align:left", onclick: () => { state.hItem = id; renderHist(); window.scrollTo({ top: 0 }); } }, a.name));
+        const nameCell = el("td", { class: "aggnm" }, el("button", { class: "edit", style: "background:none;border:0;padding:0;color:var(--accent);text-decoration:underline;font:inherit;text-align:left", onclick: () => { state.hItem = id; renderHist(); window.scrollTo({ top: 0 }); } }, a.name));
         return el("tr", {}, nameCell, td("+" + a.inc, un), td("−" + a.dec, un), td((n2 > 0 ? "+" : n2 < 0 ? "−" : "±") + Math.abs(n2), un), td(it ? qtyOf(it) : "–", it ? un : ""));
       });
-      tbl.replaceChildren(el("table", {},
-        el("thead", {}, el("tr", {}, el("th", {}, "品目"), el("th", {}, "増えた"), el("th", {}, "減った"), el("th", {}, "差し引き"), el("th", {}, "いまの数"))),
+      const uh = oneUnit ? "（" + oneUnit + "）" : "";
+      tbl.replaceChildren(el("table", { class: "aggtbl" },
+        el("thead", {}, el("tr", {}, el("th", {}, "品目"), el("th", {}, "増えた"), el("th", {}, "減った"), el("th", {}, "差引"), el("th", {}, "いま" + uh))),
         el("tbody", {}, ...body)),
         el("p", { class: "note", style: "margin-top:8px" }, "品名をタップすると、その品目のグラフに切り替わります。"));
     }
