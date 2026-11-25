@@ -33,13 +33,14 @@ service cloud.firestore {
     }
 
     function validEvent(d) {
-      return d.keys().hasOnly(['date', 'itemId', 'name', 'unit', 'delta', 'qty', 'at', 'by', 'byName'])
+      return d.keys().hasOnly(['date', 'itemId', 'name', 'unit', 'delta', 'qty', 'at', 'by', 'byName', 'memo'])
         && str(d.date, 10) && str(d.itemId, 40) && str(d.name, 60) && str(d.unit, 10)
         && d.delta is number && d.delta >= -1000000 && d.delta <= 1000000
         && qty(d.qty)
         && d.at is number
         && (d.by == null || str(d.by, 40))
-        && str(d.byName, 20);
+        && str(d.byName, 20)
+        && (!('memo' in d) || str(d.memo, 60));
     }
 
     function validPlan(d) {

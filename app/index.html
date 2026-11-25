@@ -223,6 +223,8 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
 .daytbl td .unit { font-size: .75rem; margin-left: 1px; }
 .daytbl th:first-child, .daytbl td:first-child { min-width: 0; padding-left: 0; }
 .daytbl .nm { text-align: left; width: 100%; }
+.daytbl .nm > span { display: block; }
+.daytbl .site-note { display: block; font-size: .75rem; color: var(--muted); white-space: normal; overflow-wrap: anywhere; line-height: 1.3; }
 .fhint { font-size: .75rem; color: var(--muted); }
 .dayhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .dayhead input { width: auto; padding: 6px 10px; }
@@ -775,7 +777,7 @@ h1 { font-size: 1.2rem; }
   const dLabel = (k, wd) => { const [y, m, d] = k.split("-").map(Number); const t = new Date(y, m - 1, d); return m + "/" + d + (wd ? "（" + WD[t.getDay()] + "）" : ""); };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-  function logChange(item, oldQ, newQ) {
+  function logChange(item, oldQ, newQ, memo) {
     const delta = num(newQ) - num(oldQ);
     if (!delta || !state.db || !item || !item.id) return;
     const now = new Date(), date = dk(now), at = now.getTime();
@@ -785,6 +787,7 @@ h1 { font-size: 1.2rem; }
     state.db.collection("events").doc(at + "_" + me).set({
       date, itemId: item.id, name: item.name || "", unit: item.unit || "",
       delta, qty: num(newQ), at, by: state.me || null, byName: state.myName || "",
+      ...(memo ? { memo: String(memo).slice(0, 60) } : {}),
     }).catch(() => {});
 
     // 2) running daily totals per item per person (for the day-by-day view)
@@ -930,14 +933,18 @@ h1 { font-size: 1.2rem; }
     else chart.replaceChildren(el("p", { class: "note" }, "上で品目を選ぶと、その品目の1日の数の変化をグラフで見られます。"));
 
     const td = (v, unitTxt) => el("td", {}, String(v), unitTxt ? el("span", { class: "unit" }, unitTxt) : null);
+    subscribePlansRecent();
+    const notes = new Map(evs.map((e) => [e, eventNote(e)]));
+    const showNm = !single || evs.some((e) => notes.get(e));
     const rows = [...evs].reverse().map((e) => el("tr", {},
       el("td", {}, hm(e.at)),
-      single ? null : el("td", { class: "nm" }, e.name || ""),
+      showNm ? el("td", { class: "nm" }, single ? null : el("span", {}, e.name || ""),
+        notes.get(e) ? el("small", { class: "site-note" }, notes.get(e)) : null) : null,
       td(signed(num(e.delta))),
       td(num(e.qty), e.unit),
       el("td", { class: "muted" }, whoName(e.by, e.byName) || "—")));
     tbl.replaceChildren(el("table", { class: "daytbl" },
-      el("thead", {}, el("tr", {}, el("th", {}, "時刻"), single ? null : el("th", { class: "nm" }, "品目"), el("th", {}, "増減"), el("th", {}, "変更後"), el("th", {}, "変えた人"))),
+      el("thead", {}, el("tr", {}, el("th", {}, "時刻"), showNm ? el("th", { class: "nm" }, single ? "内容" : "品目") : null, el("th", {}, "増減"), el("th", {}, "変更後"), el("th", {}, "変えた人"))),
       el("tbody", {}, ...rows)));
   }
 
@@ -1211,6 +1218,7 @@ h1 { font-size: 1.2rem; }
     state.db.collection("plans").where("date", ">=", dk(d)).onSnapshot((snap) => {
       state.plansRecent = snap.docs.map((x) => ({ id: x.id, ...x.data() })).filter((p) => p.status !== "open");
       renderPlans();
+      renderDay();
     }, () => {});
   }
 
@@ -1424,6 +1432,14 @@ h1 { font-size: 1.2rem; }
     } catch (e) { writeFailed(e); }
     finally { $("pSave").disabled = false; }
   }
+  // 「出庫済み：○○現場」のような、今日の動きに残す説明
+  function planNote(p) { return KIND[p.kind].done + (p.memo ? "：" + p.memo : ""); }
+  // 今日の動きの1行に対応する予定の説明（新しい記録は memo、前の記録は予定の済み時刻から探す）
+  function eventNote(e) {
+    if (e.memo) return e.memo;
+    const p = state.plansRecent.find((x) => x.status === "done" && x.itemId === e.itemId && Math.abs(num(x.doneAt) - num(e.at)) < 15000);
+    return p ? planNote(p) : "";
+  }
   async function finishPlan(p, btn) {
     if (needName()) return;
     if (!btn.dataset.armed) { btn.dataset.armed = "1"; btn.textContent = "本当に" + KIND[p.kind].done + "にする"; return; }
@@ -1434,7 +1450,7 @@ h1 { font-size: 1.2rem; }
     try {
       state.pending.delete(it.id);
       await w(state.db.collection("items").doc(it.id).update({ qty: next, ...stamp() }));
-      logChange(it, cur, next);
+      logChange(it, cur, next, planNote(p));
       await w(state.db.collection("plans").doc(p.id).update({ status: "done", doneAt: Date.now(), doneBy: state.me || null, doneByName: state.myName || "" }));
       toast(it.name + " を " + next + (it.unit || "") + " にしました（" + KIND[p.kind].done + "）");
     } catch (e) { writeFailed(e); }
@@ -1513,9 +1529,9 @@ h1 { font-size: 1.2rem; }
       el("thead", {}, el("tr", {}, el("th", {}, "予定日"), el("th", { class: "nm" }, "品目"), el("th", {}, "内容"), el("th", {}, "結果"))),
       el("tbody", {}, ...recent.map((p) => el("tr", {},
         el("td", {}, dLabel(p.date)),
-        el("td", { class: "nm" }, p.name),
+        el("td", { class: "nm" }, el("span", {}, p.name), p.memo ? el("small", { class: "site-note" }, p.memo) : null),
         el("td", {}, KIND[p.kind].short + " " + (p.kind === "out" ? "−" : "+") + num(p.qty)),
-        el("td", { class: "muted" }, (p.status === "done" ? "済み" : "取消") + (p.doneByName ? "（" + p.doneByName + "）" : "")))))));
+        el("td", { class: "muted" }, p.status === "done" ? "済み" : "取消", p.doneByName ? el("small", { class: "site-note" }, p.doneByName) : null))))));
   }
 
   async function del() {
