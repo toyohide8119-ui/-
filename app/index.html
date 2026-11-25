@@ -367,6 +367,14 @@ h1 { font-size: 1.2rem; }
 .linkbtn { white-space: nowrap; flex: none; background: none; border: 0; padding: 6px 4px; color: var(--accent); font-size: .85rem; cursor: pointer; text-decoration: underline; }
 .linkbtn[aria-pressed="true"] { font-weight: 700; }
 
+/* ---- 並び順の変更 ---- */
+#list { scroll-margin-top: 96px; }
+.reorder-link { display: flex; justify-content: flex-end; margin-top: -4px; }
+.reorder-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; font-size: .82rem; color: var(--ink); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.row.reorder .name { cursor: default; display: flex; align-items: center; gap: 8px; }
+.ordno { display: inline-grid; place-items: center; min-width: 1.6em; height: 1.6em; border-radius: 999px; background: var(--sunk); font-size: .8rem; font-weight: 700; color: var(--muted); }
+.row.reorder .stepper button { font-size: .9rem; }
+.row.reorder .stepper button:disabled { opacity: .3; }
 /* ---- フォルダ風のタブ ---- */
 :root { --f-list-c: #2f6fa8; --f-hist-c: #2e8a5a; --f-plan-c: #c47a1c; }
 .f-list { --fc: var(--f-list-c); }
@@ -538,6 +546,7 @@ h1 { font-size: 1.2rem; }
   <section class="list" id="list" aria-live="polite">
     <div class="empty"><strong>在庫を読み込んでいます…</strong></div>
   </section>
+  <div class="reorder-link"><button class="linkbtn" id="reorderBtn" type="button">並び順を変える</button></div>
 
   <section class="panel" aria-labelledby="meTitle">
     <h2 id="meTitle">あなたの名前</h2>
@@ -574,7 +583,7 @@ h1 { font-size: 1.2rem; }
   const $ = (id) => document.getElementById(id);
   const state = {
     open: new Set(),
-    plans: [], plansRecent: [], plansRecentSub: false, sites: new Map(), sitesSub: false, sitesEdit: false, sitesOpen: false, planItem: "", planKind: "out",
+    plans: [], plansRecent: [], plansRecentSub: false, sites: new Map(), sitesSub: false, sitesEdit: false, sitesOpen: false, planItem: "", planKind: "out", reorder: false,
     items: [], filter: "all", q: "", cat: "", group: (() => { try { return localStorage.getItem("zaiko.group") || ""; } catch { return ""; } })(),
     db: null, me: null, myName: "", canWrite: true, editing: null,
     pending: new Map(), timers: new Map(), writing: new Set(),
@@ -592,6 +601,35 @@ h1 { font-size: 1.2rem; }
     return "ok";
   };
   // big group = text before 【 (e.g. "MP【20㎏】13㎜" -> "MP"); names without 【 go to その他
+  // ---- 品目の並び順 ----
+  // order が保存されていればそれを使い、無ければ下の決まった順。どちらにも無い品目は追加した順で最後に。
+  const DEFAULT_ORDER = ["DR【20㎏】", "DR【30㎏】", "MP【5㎏】", "MP【10㎏】", "MP【20㎏】", "MP【20㎏】13㎜", "MP【20㎏】白黒"];
+  const normName = (n) => String(n || "").normalize("NFKC").replace(/\s+/g, "").toLowerCase();
+  const DEFAULT_IDX = new Map(DEFAULT_ORDER.map((n, i) => [normName(n), i]));
+  function orderOf(it) {
+    if (it && typeof it.order === "number") return it.order;
+    const i = it ? DEFAULT_IDX.get(normName(it.name)) : undefined;
+    return i === undefined ? 1e9 : (i + 1) * 10;
+  }
+  function itemCmp(a, b) {
+    return orderOf(a) - orderOf(b) || num(a.createdAt) - num(b.createdAt) || String(a.name).localeCompare(String(b.name), "ja");
+  }
+  function orderedItems() { return [...state.items].sort(itemCmp); }
+  const itemById = (id) => state.items.find((i) => i.id === id);
+  async function moveItem(it, dir) {
+    const list = orderedItems();
+    const i = list.findIndex((x) => x.id === it.id), j = i + dir;
+    if (i < 0 || j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    const changes = list.map((x, k) => [x, (k + 1) * 10]).filter(([x, o]) => x.order !== o);
+    changes.forEach(([x, o]) => { x.order = o; });   // 画面はすぐ並び替え
+    render();
+    const btn = document.querySelector('.row[data-id="' + CSS.escape(it.id) + '"] .mv' + (dir < 0 ? "up" : "down"));
+    if (btn && !btn.disabled) btn.focus({ preventScroll: true });
+    try {
+      await Promise.all(changes.map(([x, o]) => w(state.db.collection("items").doc(x.id).update({ order: o }))));
+    } catch (e) { writeFailed(e); }
+  }
   const groupOf = (it) => { const n = String(it.name || ""); const k = n.indexOf("【"); return k > 0 ? n.slice(0, k).trim() || "その他" : "その他"; };
   const qtyOf = (it) => state.pending.has(it.id) ? state.pending.get(it.id) : num(it.qty);
   const fmtTime = (ms) => {
@@ -662,12 +700,14 @@ h1 { font-size: 1.2rem; }
     const q = state.q.trim().toLowerCase();
     const shown = items
       .filter((i) => state.filter === "all" || (state.filter === "low" ? statusOf(i) !== "ok" : statusOf(i) === "out"))
-      .filter((i) => !state.group || groupOf(i) === state.group)
+      .filter((i) => state.reorder || !state.group || groupOf(i) === state.group)
       .filter((i) => !state.cat || (i.category || "") === state.cat)
-      .filter((i) => !q || [i.name, i.place, i.category, i.note].join(" ").toLowerCase().includes(q))
+      .filter((i) => state.reorder || !q || [i.name, i.place, i.category, i.note].join(" ").toLowerCase().includes(q))
       .sort((a, b) => {
+        // 並べ替え中は決まった順だけ。ふだんは「切れ・残りわずか」を上に出し、その中は決まった順
+        if (state.reorder) return itemCmp(a, b);
         const rank = { out: 0, low: 1, ok: 2 };
-        return rank[statusOf(a)] - rank[statusOf(b)] || String(a.name).localeCompare(String(b.name), "ja");
+        return rank[statusOf(a)] - rank[statusOf(b)] || itemCmp(a, b);
       });
 
     const list = $("list");
@@ -684,7 +724,11 @@ h1 { font-size: 1.2rem; }
       const a = document.activeElement;
       const keep = a && a.classList && a.classList.contains("qtyIn")
         ? { id: a.dataset.id, value: a.value, s: a.selectionStart, e: a.selectionEnd } : null;
-      list.replaceChildren(...shown.map(rowFor));
+      const nOrd = orderedItems();
+      list.replaceChildren(...(state.reorder ? [el("div", { class: "reorder-bar" },
+        el("span", {}, "▲▼で並び順を変えられます（全員の画面に反映）"),
+        el("button", { class: "btn primary small", onclick: () => setReorder(false) }, "完了"))] : []),
+        ...shown.map((it) => rowFor(it, nOrd)));
       if (keep) {
         const n = list.querySelector('.qtyIn[data-id="' + CSS.escape(keep.id) + '"]');
         if (n) { n.value = keep.value; n.focus({ preventScroll: true }); try { n.setSelectionRange(keep.s, keep.e); } catch {} }
@@ -692,7 +736,15 @@ h1 { font-size: 1.2rem; }
     }
   }
 
-  function rowFor(it) {
+  function setReorder(on) {
+    if (on && needName()) return;
+    state.reorder = on;
+    if (on) { state.filter = "all"; state.q = ""; $("q").value = ""; state.cat = ""; }
+    $("reorderBtn").textContent = on ? "並び順の変更を終わる" : "並び順を変える";
+    render();
+    if (on) $("list").scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+  function rowFor(it, nOrd) {
     const st = statusOf(it);
     const qty = qtyOf(it);
     const open = state.open.has(it.id);
@@ -700,7 +752,16 @@ h1 { font-size: 1.2rem; }
     const metaBits = [it.category, it.place && "📍" + it.place].filter(Boolean).join("・");
     const updated = it.updatedAt ? "更新 " + fmtTime(it.updatedAt) + (who ? "（" + who + "）" : "") : "";
     const toggle = () => { if (state.open.has(it.id)) state.open.delete(it.id); else state.open.add(it.id); render(); };
-    return el("div", { class: "row " + st + (open ? " open" : "") },
+    if (state.reorder) {
+      const k = nOrd.findIndex((x) => x.id === it.id);
+      return el("div", { class: "row reorder " + st, "data-id": it.id },
+        el("div", { class: "stripe", "aria-hidden": "true" }),
+        el("div", { class: "info" }, el("div", { class: "name" }, el("span", { class: "ordno" }, String(k + 1)), el("span", { class: "nm" }, it.name || "（名称なし）"))),
+        el("div", { class: "stepper" },
+          el("button", { class: "mvup", "aria-label": it.name + "を上へ", onclick: () => moveItem(it, -1), disabled: k <= 0 ? "" : null }, "▲"),
+          el("button", { class: "mvdown", "aria-label": it.name + "を下へ", onclick: () => moveItem(it, 1), disabled: k >= nOrd.length - 1 ? "" : null }, "▼")));
+    }
+    return el("div", { class: "row " + st + (open ? " open" : ""), "data-id": it.id },
       el("div", { class: "stripe", "aria-hidden": "true" }),
       el("div", { class: "info" },
         el("button", { class: "name", "aria-expanded": String(open), onclick: toggle },
@@ -1141,9 +1202,9 @@ h1 { font-size: 1.2rem; }
 
     // item choices: current items, plus deleted ones that still have records
     const names = new Map();
-    state.items.forEach((i) => names.set(i.id, i.name || "（名称なし）"));
+    orderedItems().forEach((i) => names.set(i.id, i.name || "（名称なし）"));
     state.hist.forEach((h) => { if (!names.has(h.itemId)) names.set(h.itemId, (h.name || "（名称なし）") + "（削除済み）"); });
-    const opts = [...names].sort((a, b) => a[1].localeCompare(b[1], "ja"));
+    const opts = [...names];
     if (state.hItem && !names.has(state.hItem)) state.hItem = "";
     $("hItem").replaceChildren(el("option", { value: "" }, "すべての品目"), ...opts.map(([id, nm]) => el("option", { value: id }, nm)));
     $("hItem").value = state.hItem;
@@ -1205,13 +1266,17 @@ h1 { font-size: 1.2rem; }
         el("thead", {}, el("tr", {}, el("th", {}, "日付"), el("th", {}, "増えた"), el("th", {}, "減った"), el("th", {}, "その日の終わり"))),
         el("tbody", {}, ...body)));
     } else {
-      $("hTblTitle").textContent = "品目ごとの増減（減った順）";
+      $("hTblTitle").textContent = "品目ごとの増減";
       const agg = new Map();
       rows.forEach((h) => {
         const a = agg.get(h.itemId) || { inc: 0, dec: 0, name: names.get(h.itemId) || h.name || "", unit: h.unit || "" };
         a.inc += num(h.inc); a.dec += num(h.dec); agg.set(h.itemId, a);
       });
-      const list = [...agg].sort((a, b) => b[1].dec - a[1].dec || a[1].name.localeCompare(b[1].name, "ja"));
+      const list = [...agg].sort((a, b) => {
+        const ia = itemById(a[0]), ib = itemById(b[0]);
+        if (ia && ib) return itemCmp(ia, ib);
+        return (ia ? -1 : 0) + (ib ? 1 : 0) || a[1].name.localeCompare(b[1].name, "ja");
+      });
       const body = list.map(([id, a]) => {
         const it = state.items.find((i) => i.id === id);
         const un = it ? it.unit || "" : a.unit;
@@ -1264,11 +1329,11 @@ h1 { font-size: 1.2rem; }
 
   function itemOptions(sel, withAll, value) {
     const groups = new Map();
-    [...state.items].sort((a, b) => String(a.name).localeCompare(String(b.name), "ja")).forEach((i) => {
+    orderedItems().forEach((i) => {
       const g = groupOf(i); if (!groups.has(g)) groups.set(g, []); groups.get(g).push(i);
     });
     const opts = withAll ? [el("option", { value: "" }, "すべての品目")] : [];
-    [...groups].sort((a, b) => a[0].localeCompare(b[0], "ja")).forEach(([g, arr]) =>
+    [...groups].forEach(([g, arr]) =>
       opts.push(el("optgroup", { label: g }, ...arr.map((i) => el("option", { value: i.id }, i.name)))));
     sel.replaceChildren(...opts);
     sel.value = value && state.items.some((i) => i.id === value) ? value : withAll ? "" : (state.items[0] && sel.querySelector("option") ? sel.querySelector("option").value : "");
@@ -1551,8 +1616,9 @@ h1 { font-size: 1.2rem; }
     const ids = [...new Set(state.plans.map((p) => p.itemId))]
       .filter((id) => !state.planItem || id === state.planItem)
       .sort((a, b) => {
-        const na = (state.items.find((i) => i.id === a) || {}).name || "", nb = (state.items.find((i) => i.id === b) || {}).name || "";
-        return String(na).localeCompare(String(nb), "ja");
+        const ia = itemById(a), ib = itemById(b);
+        if (ia && ib) return itemCmp(ia, ib);
+        return (ia ? -1 : 0) + (ib ? 1 : 0);
       });
     if (state.planItem && !ids.includes(state.planItem)) ids.push(state.planItem);
 
@@ -1727,6 +1793,7 @@ h1 { font-size: 1.2rem; }
   window.addEventListener("hashchange", () => setView(viewFromHash()));
   $("tabPlan").addEventListener("click", () => { location.hash = "plan"; setView("plan"); });
   $("pAddBtn").addEventListener("click", () => openPlanForm());
+  $("reorderBtn").addEventListener("click", () => setReorder(!state.reorder));
   $("pCancel").addEventListener("click", closePlanForm);
   // IME の変換前のひらがなを拾って、よみ欄に自動で入れる（エクセルのふりがなと同じ考え方）
   let compKana = "";

@@ -10,7 +10,7 @@ service cloud.firestore {
 
     function validItem(d) {
       return d.keys().hasOnly(['name', 'category', 'qty', 'unit', 'min', 'place', 'note',
-                               'createdAt', 'updatedAt', 'updatedBy', 'updatedByName'])
+                               'createdAt', 'updatedAt', 'updatedBy', 'updatedByName', 'order'])
         && d.name is string && d.name.size() > 0 && d.name.size() <= 60
         && qty(d.qty)
         && (!('min' in d) || qty(d.min))
@@ -21,7 +21,8 @@ service cloud.firestore {
         && (!('updatedBy' in d) || d.updatedBy == null || str(d.updatedBy, 40))
         && (!('updatedByName' in d) || str(d.updatedByName, 20))
         && (!('createdAt' in d) || d.createdAt is number)
-        && (!('updatedAt' in d) || d.updatedAt is number);
+        && (!('updatedAt' in d) || d.updatedAt is number)
+        && (!('order' in d) || (d.order is int && d.order >= 0 && d.order <= 1000000));
     }
 
     function validHist(d) {
