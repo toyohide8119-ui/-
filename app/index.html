@@ -621,7 +621,7 @@ h1 { font-size: 1.2rem; }
     <datalist id="knownNames"></datalist>
   </section>
   </div>
-  <p class="ver">Ver.26.2</p>
+  <p class="ver">Ver.26.3</p>
 </div>
 <div class="modal" id="nameModal" hidden role="dialog" aria-modal="true" aria-labelledby="nmTitle">
   <div class="sheet">
@@ -862,8 +862,7 @@ h1 { font-size: 1.2rem; }
                 class: "qtyBtn" + (String(qty).length >= 5 ? " long" : ""), "data-id": it.id, "aria-label": it.name + " " + qty + (it.unit || "") + "（タップして出庫・入庫など）",
                 onclick: () => openKeypad(it),
               }, String(qty))
-            : el("b", {}, String(qty)),
-          el("span", {}, it.unit || "")),
+            : el("b", { "aria-label": qty + (it.unit || "") }, String(qty))),
         state.canWrite ? el("button", { "aria-label": it.name + "を1増やす", onclick: () => bump(it, 1) }, "＋") : null,
       ),
     );
