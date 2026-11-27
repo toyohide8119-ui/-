@@ -343,6 +343,16 @@ h1 { font-size: 1.2rem; }
 @media (pointer: coarse) {
   input, select, textarea { font-size: 16px !important; }
 }
+/* 今日の動き：あとから現場名を付ける */
+.modal.top { align-items: flex-start; }
+.es-list { display: flex; flex-direction: column; max-height: min(40vh, 300px); overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+.es-list:empty { display: none; }
+.es-list button { text-align: left; border: 0; border-top: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px 12px; font-size: 1rem; display: flex; align-items: baseline; gap: 8px; }
+.es-list button:first-child { border-top: 0; }
+.es-list button small { color: var(--muted); font-size: .75rem; }
+.es-list button[aria-selected="true"] { background: var(--sunk); font-weight: 700; }
+.daytbl .site-add { display: inline-block; margin-top: 2px; border: 1px dashed var(--line); background: none; color: var(--accent); border-radius: 6px; padding: 1px 8px; font-size: .75rem; line-height: 1.5; white-space: nowrap; }
+.daytbl .site-note .site-fix { border: 0; background: none; color: var(--accent); text-decoration: underline; font-size: .75rem; padding: 0 0 0 6px; white-space: nowrap; }
 /* 在庫の数をタップしたときのテンキー */
 .kp-wrap { position: fixed; left: 0; right: 0; top: 0; height: 100%; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; }
 .kp-back { position: absolute; inset: 0; background: rgba(10, 20, 18, .5); }
@@ -621,7 +631,7 @@ h1 { font-size: 1.2rem; }
     <datalist id="knownNames"></datalist>
   </section>
   </div>
-  <p class="ver">Ver.26.3</p>
+  <p class="ver">Ver.27</p>
 </div>
 <div class="modal" id="nameModal" hidden role="dialog" aria-modal="true" aria-labelledby="nmTitle">
   <div class="sheet">
@@ -633,6 +643,19 @@ h1 { font-size: 1.2rem; }
     <div class="actions">
       <button class="btn" id="askLater">あとで</button>
       <button class="btn primary big" id="askSave">保存</button>
+    </div>
+  </div>
+</div>
+<div class="modal top" id="esModal" hidden role="dialog" aria-modal="true" aria-labelledby="esTitle">
+  <div class="sheet">
+    <div><h2 id="esTitle">現場名・相手先を付ける</h2><p class="note" id="esSub"></p></div>
+    <input id="esInput" maxlength="57" autocomplete="off" enterkeyhint="done" placeholder="入力するか下から選ぶ" aria-label="現場名・相手先">
+    <div class="es-list" id="esList" role="listbox" aria-label="現場名・相手先の候補"></div>
+    <div class="actions">
+      <button class="btn ghost" id="esDel" hidden>現場名を消す</button>
+      <span class="spacer"></span>
+      <button class="btn" id="esCancel">やめる</button>
+      <button class="btn primary" id="esSave" disabled>保存</button>
     </div>
   </div>
 </div>
@@ -1245,6 +1268,59 @@ h1 { font-size: 1.2rem; }
     svg.addEventListener("pointerleave", () => { tip.hidden = true; svg.querySelectorAll(".dotm").forEach((c) => c.setAttribute("r", "5")); });
   }
 
+  // ---------- 今日の動き：出庫に、あとから現場名を付ける ----------
+  // 対象：テンキーの「出庫」と「−」ボタンで減らした行（交換・廃棄・数を直す・予定の済みは対象外）
+  function canSite(e) {
+    if (!state.canWrite || !e.id || num(e.delta) >= 0) return false;
+    if (e.memo) return e.memo === "出庫" || e.memo.startsWith("出庫：");
+    return !eventNote(e);
+  }
+  const siteOfEvent = (e) => (e.memo && e.memo.startsWith("出庫：") ? e.memo.slice(3) : "");
+  const es = { ev: null, filter: false };
+  function openEventSite(e) {
+    if (needName()) return;
+    es.ev = e; es.filter = false;
+    subscribeSites();
+    const cur = siteOfEvent(e);
+    $("esTitle").textContent = cur ? "現場名・相手先を直す" : "現場名・相手先を付ける";
+    $("esSub").textContent = dLabel(e.date) + " " + hm(e.at) + "　" + (e.name || "") + " " + signed(num(e.delta)) + (e.unit || "");
+    $("esInput").value = cur;
+    $("esDel").hidden = !cur;
+    $("esModal").hidden = false;
+    renderEsList();
+  }
+  function closeEventSite() { $("esModal").hidden = true; es.ev = null; }
+  function renderEsList() {
+    if ($("esModal").hidden) return;
+    const v = $("esInput").value.trim();
+    const all = siteList();
+    const q = es.filter ? v : "";
+    const list = q && all.some((n) => n.includes(q) && n !== q) ? all.filter((n) => n.includes(q)) : all;
+    $("esList").replaceChildren(...list.map((n) => el("button", {
+      role: "option", "aria-selected": String(n === v),
+      onclick: () => { $("esInput").value = n; es.filter = false; renderEsList(); },
+    }, el("span", {}, n), needsYomi(n) && yomiOf(n) ? el("small", {}, yomiOf(n)) : null)));
+    $("esSave").disabled = !v || v === siteOfEvent(es.ev || {});
+  }
+  async function saveEventSite(remove) {
+    const e = es.ev;
+    if (!e || !state.db) return;
+    const n = remove ? "" : $("esInput").value.trim().slice(0, 57);
+    if (!remove && !n) return;
+    const memo = n ? "出庫：" + n : "出庫";
+    closeEventSite();
+    try {
+      await w(state.db.collection("events").doc(e.id).update({ memo }));
+      e.memo = memo;
+      if (n) rememberSite(n, "");
+      toast(n ? "「" + (e.name || "") + "」の出庫に「" + n + "」を付けました" : "現場名を消しました");
+    } catch (err) {
+      if (err && err.code === "permission-denied") toast("保存できませんでした。Firebaseのルールを新しいものに貼り替えてください");
+      else writeFailed(err);
+    }
+    renderDay();
+  }
+
   function renderDay() {
     if (state.view !== "hist") return;
     subscribeEvents();
@@ -1273,11 +1349,13 @@ h1 { font-size: 1.2rem; }
     const td = (v, unitTxt) => el("td", {}, String(v), unitTxt ? el("span", { class: "unit" }, unitTxt) : null);
     subscribePlansRecent();
     const notes = new Map(evs.map((e) => [e, eventNote(e)]));
-    const showNm = !single || evs.some((e) => notes.get(e));
+    const showNm = !single || evs.some((e) => notes.get(e) || canSite(e));
     const rows = [...evs].reverse().map((e) => el("tr", {},
       el("td", {}, hm(e.at)),
       showNm ? el("td", { class: "nm" }, single ? null : el("span", {}, e.name || ""),
-        notes.get(e) ? el("small", { class: "site-note" }, notes.get(e)) : null) : null,
+        notes.get(e) ? el("small", { class: "site-note" }, notes.get(e),
+          canSite(e) && siteOfEvent(e) ? el("button", { class: "site-fix", onclick: () => openEventSite(e) }, "直す") : null) : null,
+        canSite(e) && !siteOfEvent(e) ? el("button", { class: "site-add", onclick: () => openEventSite(e) }, "＋現場名") : null) : null,
       td(signed(num(e.delta))),
       td(num(e.qty), e.unit),
       el("td", { class: "muted" }, whoName(e.by, e.byName) || "—")));
@@ -1580,6 +1658,7 @@ h1 { font-size: 1.2rem; }
     state.db.collection("sites").onSnapshot((snap) => {
       state.sites = new Map(snap.docs.map((d) => [d.data().name, d.data()]));
       renderSites();
+      renderEsList();
     }, () => {});
   }
   function siteList() {
@@ -2004,6 +2083,13 @@ h1 { font-size: 1.2rem; }
   $("cancelBtn").addEventListener("click", closeForm);
   $("saveBtn").addEventListener("click", save);
   $("delBtn").addEventListener("click", del);
+  $("esInput").addEventListener("input", () => { es.filter = true; renderEsList(); });
+  $("esInput").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (!$("esSave").disabled) saveEventSite(); } });
+  $("esSave").addEventListener("click", () => saveEventSite());
+  $("esDel").addEventListener("click", () => saveEventSite(true));
+  $("esCancel").addEventListener("click", closeEventSite);
+  $("esModal").addEventListener("click", (e) => { if (e.target === $("esModal")) closeEventSite(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("esModal").hidden) closeEventSite(); });
   $("kpKeys").replaceChildren(...["7", "8", "9", "4", "5", "6", "1", "2", "3", "C", "0", "⌫"].map((k) =>
     el("button", { class: /[0-9]/.test(k) ? "" : "fn", "aria-label": k === "⌫" ? "1文字消す" : k === "C" ? "全部消す" : k, onclick: () => kpKey(k) }, k)));
   $("kpOk").addEventListener("click", () => { if (kp.digits !== "") kpStep(2); });

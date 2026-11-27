@@ -95,7 +95,12 @@ service cloud.firestore {
     match /events/{id} {
       allow read: if true;
       allow create: if validEvent(request.resource.data);
-      allow update, delete: if false;
+      // あとから出庫に現場名を付ける・直す・消す（memo だけ、「出庫」で始まる形だけ）
+      allow update: if validEvent(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memo'])
+        && resource.data.delta < 0
+        && request.resource.data.memo.matches('^出庫(：.+)?$');
+      allow delete: if false;
     }
   }
 }
