@@ -134,14 +134,14 @@ button { font: inherit; cursor: pointer; }
 .qty { min-width: 76px; text-align: center; }
 .qty b { font-family: var(--font-num); font-size: 1.8rem; font-variant-numeric: tabular-nums; display: block; line-height: 1.1; }
 .qty span { font-size: .88rem; color: var(--muted); }
-.qtyIn {
+.qtyBtn {
   width: 84px; padding: 4px 4px; text-align: center; font-family: var(--font-num); font-size: 1.8rem; font-weight: 700;
-  font-variant-numeric: tabular-nums; line-height: 1.1; border: 1px dashed var(--line); background: var(--surface); border-radius: 8px;
+  font-variant-numeric: tabular-nums; line-height: 1.1; border: 1px dashed var(--line); background: var(--surface); border-radius: 8px; color: var(--ink);
 }
-.qtyIn:hover { border-color: var(--accent); }
-.qtyIn:focus { border-style: solid; border-color: var(--accent); }
-.row.out .qtyIn { color: var(--bad); }
-.row.low .qtyIn { color: var(--warn); }
+.qtyBtn:hover { border-color: var(--accent); }
+.qtyBtn:focus-visible { border-style: solid; border-color: var(--accent); }
+.row.out .qtyBtn { color: var(--bad); }
+.row.low .qtyBtn { color: var(--warn); }
 .row.out .qty b { color: var(--bad); }
 .row.low .qty b { color: var(--warn); }
 
@@ -219,7 +219,7 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
   .meta, .meta .edit { font-size: .86rem; }
   .stepper button { width: 40px; height: 40px; }
   .qty { min-width: 64px; }
-  .qtyIn { width: 68px; font-size: 1.5rem; }
+  .qtyBtn { width: 68px; font-size: 1.5rem; }
   .qty b { font-size: 1.5rem; }
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -281,13 +281,13 @@ h1 { font-size: 1.2rem; }
 .stepper { gap: 4px; }
 .stepper button { width: 40px; height: 40px; font-size: 1.35rem; }
 .qty { min-width: 0; display: flex; flex-direction: column; align-items: center; }
-.qtyIn { width: 76px; font-size: 1.45rem; padding: 3px 2px; }
+.qtyBtn { width: 76px; font-size: 1.45rem; padding: 3px 2px; }
 .qty b { font-size: 1.45rem; }
 .qty span { font-size: .7rem; line-height: 1.1; }
 @media (max-width: 460px) {
   .row .name { font-size: 1.02rem; }
   .stepper button { width: 38px; height: 38px; }
-  .qtyIn { width: 64px; font-size: 1.3rem; }
+  .qtyBtn { width: 64px; font-size: 1.3rem; }
   .qty b { font-size: 1.3rem; }
   .toolbar .btn { padding: 8px 8px; }
 }
@@ -341,6 +341,59 @@ h1 { font-size: 1.2rem; }
 @media (pointer: coarse) {
   input, select, textarea { font-size: 16px !important; }
 }
+/* 在庫の数をタップしたときのテンキー */
+.kp-wrap { position: fixed; left: 0; right: 0; top: 0; height: 100%; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; }
+.kp-back { position: absolute; inset: 0; background: rgba(10, 20, 18, .5); }
+.kp {
+  position: relative; background: var(--surface); border-radius: 16px 16px 0 0; width: 100%; max-width: 480px; margin: 0 auto;
+  padding: 12px 16px calc(14px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 10px;
+  max-height: 100%; overflow-y: auto; box-shadow: 0 -4px 20px rgba(0, 0, 0, .18);
+}
+.kp-head { display: flex; align-items: center; gap: 8px; }
+.kp-ttl { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.kp-ttl b { font-size: 1.05rem; overflow-wrap: anywhere; }
+.kp-ttl span { font-size: .85rem; color: var(--muted); }
+.kp-x { width: 40px; height: 40px; flex: none; border: 0; border-radius: 50%; background: var(--sunk); color: var(--ink); font-size: 1.3rem; line-height: 1; }
+.kp-bar {
+  display: flex; align-items: baseline; gap: 6px; padding: 8px 14px; border-radius: 10px; background: var(--sunk);
+  border: 2px solid var(--accent); min-height: 3.6rem;
+}
+.kp-lbl { font-size: .8rem; color: var(--muted); white-space: nowrap; }
+.kp-num { flex: 1; text-align: right; font-family: var(--font-num); font-size: 2.2rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; overflow-wrap: anywhere; }
+.kp-num.empty { color: var(--muted); opacity: .5; }
+.kp-unit { font-size: .95rem; color: var(--muted); white-space: nowrap; }
+.kp-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kp-keys button {
+  height: 54px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  font-family: var(--font-num); font-size: 1.6rem; font-weight: 700; touch-action: manipulation; -webkit-user-select: none; user-select: none;
+}
+.kp-keys button:active { background: var(--sunk); }
+.kp-keys .fn { font-family: var(--font-body); font-size: 1.05rem; background: var(--sunk); }
+.kp-ok { width: 100%; margin-top: 8px; padding: 13px; font-size: 1.15rem; }
+.kp-ok:disabled { opacity: .45; }
+.kp-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kp-act {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 6px; border-radius: 12px;
+  border: 2px solid var(--kc); background: var(--surface); color: var(--ink); min-width: 0;
+}
+.kp-act b { font-size: 1.25rem; color: var(--kc); }
+.kp-act small { font-family: var(--font-num); font-size: .9rem; color: var(--muted); white-space: nowrap; }
+.kp-act .kp-need { font-family: var(--font-body); font-size: .78rem; color: var(--muted); white-space: normal; }
+.kp-act:disabled { opacity: .4; }
+.kp-act.k-out { --kc: var(--c-out); }
+.kp-act.k-in { --kc: var(--c-in); }
+.kp-act.k-swap { --kc: #7a4fb0; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .kp-act.k-swap { --kc: #b79ae6; } }
+:root[data-theme="dark"] .kp-act.k-swap { --kc: #b79ae6; }
+.kp-act.k-waste { --kc: var(--bad); }
+.kp-set { width: 100%; font-size: .95rem; }
+.kp-set:disabled { opacity: .45; }
+.kp-backbtn { align-self: flex-start; font-size: .9rem; }
+.kp-rlbl { font-size: .85rem; }
+.kp-rlbl input { font-size: 1.1rem; padding: 12px; }
+.kp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.kp-chips button { border: 1px solid var(--line); background: var(--sunk); color: var(--ink); border-radius: 999px; padding: 6px 12px; font-size: .9rem; }
+.kp-chips button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 /* 予定の入力：日付・品目・数量を横一列に */
 .prow3 { grid-template-columns: minmax(0, 7.6em) minmax(0, 1.3fr) minmax(0, 1fr); gap: 6px; }
 .prow3 > label { min-width: 0; }
@@ -566,7 +619,7 @@ h1 { font-size: 1.2rem; }
     <datalist id="knownNames"></datalist>
   </section>
   </div>
-  <p class="ver">Ver.26</p>
+  <p class="ver">Ver.26.1</p>
 </div>
 <div class="modal" id="nameModal" hidden role="dialog" aria-modal="true" aria-labelledby="nmTitle">
   <div class="sheet">
@@ -578,6 +631,31 @@ h1 { font-size: 1.2rem; }
     <div class="actions">
       <button class="btn" id="askLater">あとで</button>
       <button class="btn primary big" id="askSave">保存</button>
+    </div>
+  </div>
+</div>
+<div class="kp-wrap" id="kp" hidden>
+  <div class="kp-back" id="kpBack"></div>
+  <div class="kp" role="dialog" aria-modal="true" aria-labelledby="kpTitle">
+    <div class="kp-head">
+      <div class="kp-ttl"><b id="kpTitle"></b><span id="kpNow"></span></div>
+      <button class="kp-x" id="kpClose" aria-label="閉じる">×</button>
+    </div>
+    <div class="kp-bar" id="kpBar" aria-live="polite"><span class="kp-lbl" id="kpLbl">数を入力</span><span class="kp-num" id="kpNum">0</span><span class="kp-unit" id="kpUnit"></span></div>
+    <div id="kpStep1">
+      <div class="kp-keys" id="kpKeys"></div>
+      <button class="btn primary kp-ok" id="kpOk" disabled>決定</button>
+    </div>
+    <div id="kpStep2" hidden>
+      <div class="kp-acts" id="kpActs"></div>
+      <button class="btn kp-set" id="kpSet"></button>
+      <button class="btn ghost kp-backbtn" id="kpRetype">← 数字を打ち直す</button>
+    </div>
+    <div id="kpStep3" hidden>
+      <label class="kp-rlbl"><span id="kpRTitle">理由</span><input id="kpReason" maxlength="50" autocomplete="off" enterkeyhint="done" placeholder="例：袋破れ"></label>
+      <div class="kp-chips" id="kpChips"></div>
+      <button class="btn primary kp-ok" id="kpRec" disabled>記録する</button>
+      <button class="btn ghost kp-backbtn" id="kpBack2">← 選びなおす</button>
     </div>
   </div>
 </div>
@@ -729,18 +807,11 @@ h1 { font-size: 1.2rem; }
     } else if (!shown.length) {
       list.replaceChildren(el("div", { class: "empty" }, el("strong", {}, "条件に合う品目はありません")));
     } else {
-      const a = document.activeElement;
-      const keep = a && a.classList && a.classList.contains("qtyIn")
-        ? { id: a.dataset.id, value: a.value, s: a.selectionStart, e: a.selectionEnd } : null;
       const nOrd = orderedItems();
       list.replaceChildren(...(state.reorder ? [el("div", { class: "reorder-bar" },
         el("span", {}, "▲▼で並び順を変えられます（全員の画面に反映）"),
         el("button", { class: "btn primary small", onclick: () => setReorder(false) }, "完了"))] : []),
         ...shown.map((it) => rowFor(it, nOrd)));
-      if (keep) {
-        const n = list.querySelector('.qtyIn[data-id="' + CSS.escape(keep.id) + '"]');
-        if (n) { n.value = keep.value; n.focus({ preventScroll: true }); try { n.setSelectionRange(keep.s, keep.e); } catch {} }
-      }
     }
   }
 
@@ -785,13 +856,10 @@ h1 { font-size: 1.2rem; }
         state.canWrite ? el("button", { "aria-label": it.name + "を1減らす", onclick: () => bump(it, -1), disabled: qty <= 0 ? "" : null }, "−") : null,
         el("div", { class: "qty" },
           state.canWrite
-            ? el("input", {
-                class: "qtyIn", type: "text", inputmode: "numeric", pattern: "[0-9]*", enterkeyhint: "done",
-                autocomplete: "off", "data-id": it.id, value: String(qty), "aria-label": it.name + "の数量（タップして入力）",
-                onfocus: (e) => e.target.select(),
-                onkeydown: (e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { e.target.value = String(qtyOf(it)); e.target.blur(); } },
-                onblur: (e) => commitQty(it, e.target),
-              })
+            ? el("button", {
+                class: "qtyBtn", "data-id": it.id, "aria-label": it.name + " " + qty + (it.unit || "") + "（タップして出庫・入庫など）",
+                onclick: () => openKeypad(it),
+              }, String(qty))
             : el("b", {}, String(qty)),
           el("span", {}, it.unit || "")),
         state.canWrite ? el("button", { "aria-label": it.name + "を1増やす", onclick: () => bump(it, 1) }, "＋") : null,
@@ -817,18 +885,155 @@ h1 { font-size: 1.2rem; }
     clearTimeout(state.timers.get(it.id));
     state.timers.set(it.id, setTimeout(() => flushQty(it.id), 700));
   }
-  function commitQty(it, input) {
-    const raw = input.value.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[^0-9]/g, "");
-    const cur = qtyOf(it);
-    if (raw === "" || (Number(raw) !== cur && needName())) { input.value = String(cur); return; }
-    const next = Math.max(0, parseInt(raw, 10));
-    if (next === cur) { input.value = String(cur); return; }
-    state.pending.set(it.id, next);
-    clearTimeout(state.timers.get(it.id));
-    flushQty(it.id);
-    toast("「" + it.name + "」を " + next + (it.unit || "") + " にしました");
-    render();
+  // ---------- テンキー（出庫・入庫・交換・廃棄・数を直す） ----------
+  const KP = {
+    out:   { label: "出庫", sign: -1, cls: "k-out" },
+    in:    { label: "入庫", sign: 1, cls: "k-in" },
+    swap:  { label: "交換", sign: -1, cls: "k-swap", reason: true },
+    waste: { label: "廃棄", sign: -1, cls: "k-waste", reason: true },
+  };
+  const kp = { id: "", digits: "", step: 1, kind: "", reasons: null };
+  const kpItem = () => state.items.find((i) => i.id === kp.id);
+  function openKeypad(it) {
+    if (needName()) return;
+    kp.id = it.id; kp.digits = ""; kp.kind = "";
+    $("kpReason").value = "";
+    kpStep(1);
+    $("kp").hidden = false;
+    fitKeypad();
+    $("kpOk").focus({ preventScroll: true });
   }
+  function closeKeypad() { $("kp").hidden = true; kp.id = ""; if (document.activeElement) document.activeElement.blur(); }
+  function kpStep(n) {
+    kp.step = n;
+    $("kpStep1").hidden = n !== 1; $("kpStep2").hidden = n !== 2; $("kpStep3").hidden = n !== 3;
+    kpRender();
+  }
+  function kpRender() {
+    const it = kpItem();
+    if (!it) { closeKeypad(); return; }
+    const cur = qtyOf(it), unit = it.unit || "", n = kp.digits === "" ? 0 : parseInt(kp.digits, 10);
+    $("kpTitle").textContent = it.name || "（名称なし）";
+    $("kpNow").textContent = "いま " + cur + unit;
+    $("kpNum").textContent = kp.digits === "" ? "0" : kp.digits;
+    $("kpNum").classList.toggle("empty", kp.digits === "");
+    $("kpUnit").textContent = unit;
+    $("kpLbl").textContent = kp.step === 1 ? "数を入力" : kp.step === 3 ? KP[kp.kind].label : "この数を";
+    $("kpOk").disabled = kp.digits === "";
+    if (kp.step === 2) {
+      $("kpActs").replaceChildren(...Object.entries(KP).map(([k, d]) => {
+        const next = cur + d.sign * n;
+        const short = n <= 0 || next < 0;
+        return el("button", { class: "kp-act " + d.cls, disabled: short ? "" : null, onclick: () => kpPick(k) },
+          el("b", {}, d.label),
+          n <= 0 ? el("small", { class: "kp-need" }, "1以上を入力")
+            : short ? el("small", { class: "kp-need" }, "在庫が足りません")
+            : el("small", {}, cur + " → " + next + unit),
+          d.reason && !short ? el("small", { class: "kp-need" }, "理由を入力") : null);
+      }));
+      $("kpSet").textContent = n === cur ? "数を直す（いまと同じ数です）" : "数を直す（在庫を " + n + unit + " にする）";
+      $("kpSet").disabled = n === cur;
+    }
+    if (kp.step === 3) {
+      $("kpRTitle").textContent = KP[kp.kind].label + "の理由（必ず入力）";
+      $("kpRec").disabled = !$("kpReason").value.trim();
+      $("kpRec").textContent = KP[kp.kind].label + "を記録する（" + cur + " → " + (cur - n) + unit + "）";
+      kpChips();
+    }
+  }
+  function kpKey(k) {
+    if (kp.step !== 1) return;
+    if (k === "C") kp.digits = "";
+    else if (k === "⌫") kp.digits = kp.digits.slice(0, -1);
+    else if (kp.digits.length < 6) kp.digits = (kp.digits === "0" ? "" : kp.digits) + k;
+    kpRender();
+  }
+  function kpPick(k) {
+    kp.kind = k;
+    if (KP[k].reason) { kpStep(3); loadReasons(); fitKeypad(); }
+    else kpApply();
+  }
+  // 交換・廃棄の理由：この端末で使ったもの＋みんなの最近の記録から
+  function reasonList() {
+    let mine = [];
+    try { mine = JSON.parse(ls.get("zaiko.reasons") || "[]"); } catch {}
+    const seen = new Set(), out = [];
+    for (const r of [...mine, ...(kp.reasons || [])]) { if (r && !seen.has(r)) { seen.add(r); out.push(r); } }
+    return out.slice(0, 10);
+  }
+  function rememberReason(r) {
+    let mine = [];
+    try { mine = JSON.parse(ls.get("zaiko.reasons") || "[]"); } catch {}
+    ls.set("zaiko.reasons", JSON.stringify([r, ...mine.filter((x) => x !== r)].slice(0, 20)));
+  }
+  async function loadReasons() {
+    if (kp.reasons || !state.db) return;
+    kp.reasons = [];
+    try {
+      const snap = await state.db.collection("events").orderBy("at", "desc").limit(300).get();
+      const seen = new Set();
+      snap.docs.forEach((d) => {
+        const m = /^(交換|廃棄)：(.+)$/.exec(d.data().memo || "");
+        if (m && !seen.has(m[2])) { seen.add(m[2]); kp.reasons.push(m[2]); }
+      });
+    } catch {}
+    if (kp.step === 3) kpChips();
+  }
+  function kpChips() {
+    const v = $("kpReason").value.trim();
+    const list = reasonList();
+    $("kpChips").hidden = !list.length;
+    $("kpChips").replaceChildren(...list.map((r) => el("button", {
+      "aria-pressed": String(r === v),
+      onclick: () => { $("kpReason").value = r; kpRender(); },
+    }, r)));
+  }
+  async function kpApply(setTo) {
+    const it = kpItem();
+    if (!it || !state.db) return;
+    const cur = qtyOf(it), n = kp.digits === "" ? 0 : parseInt(kp.digits, 10), unit = it.unit || "";
+    let next, memo;
+    if (setTo) { next = n; memo = "数を直す"; }
+    else {
+      const d = KP[kp.kind];
+      next = cur + d.sign * n;
+      if (n <= 0 || next < 0) return;
+      memo = d.label;
+      if (d.reason) {
+        const r = $("kpReason").value.trim().slice(0, 50);
+        if (!r) { $("kpReason").focus(); return; }
+        memo += "：" + r;
+        rememberReason(r);
+        if (kp.reasons && !kp.reasons.includes(r)) kp.reasons.unshift(r);
+      }
+    }
+    if (next === cur) { closeKeypad(); return; }
+    closeKeypad();
+    clearTimeout(state.timers.get(it.id));
+    state.pending.set(it.id, next);
+    render();
+    state.writing.add(it.id);
+    try {
+      await w(state.db.collection("items").doc(it.id).update({ qty: next, ...stamp() }));
+      logChange(it, cur, next, memo);
+      if (state.pending.get(it.id) === next) state.pending.delete(it.id);
+      toast("「" + it.name + "」" + (setTo ? "を " + next + unit + " にしました" : memo.split("：")[0] + " " + n + unit + "（" + cur + " → " + next + unit + "）"));
+    } catch (e) {
+      state.pending.delete(it.id);
+      writeFailed(e);
+    } finally {
+      state.writing.delete(it.id);
+      render();
+    }
+  }
+  // キーボードが出ても入力欄が隠れないよう、見えている範囲に合わせる
+  function fitKeypad() {
+    const vv = window.visualViewport, box = $("kp");
+    if (!vv || box.hidden) { box.style.top = ""; box.style.height = ""; return; }
+    box.style.top = vv.offsetTop + "px";
+    box.style.height = vv.height + "px";
+  }
+
   async function flushQty(id) {
     if (state.writing.has(id)) { state.timers.set(id, setTimeout(() => flushQty(id), 300)); return; }
     if (!state.pending.has(id)) return;
@@ -1798,6 +2003,26 @@ h1 { font-size: 1.2rem; }
   $("cancelBtn").addEventListener("click", closeForm);
   $("saveBtn").addEventListener("click", save);
   $("delBtn").addEventListener("click", del);
+  $("kpKeys").replaceChildren(...["7", "8", "9", "4", "5", "6", "1", "2", "3", "C", "0", "⌫"].map((k) =>
+    el("button", { class: /[0-9]/.test(k) ? "" : "fn", "aria-label": k === "⌫" ? "1文字消す" : k === "C" ? "全部消す" : k, onclick: () => kpKey(k) }, k)));
+  $("kpOk").addEventListener("click", () => { if (kp.digits !== "") kpStep(2); });
+  $("kpClose").addEventListener("click", closeKeypad);
+  $("kpBack").addEventListener("click", closeKeypad);
+  $("kpRetype").addEventListener("click", () => kpStep(1));
+  $("kpBack2").addEventListener("click", () => { if (document.activeElement) document.activeElement.blur(); kpStep(2); });
+  $("kpSet").addEventListener("click", () => kpApply(true));
+  $("kpRec").addEventListener("click", () => kpApply());
+  $("kpReason").addEventListener("input", kpRender);
+  $("kpReason").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); kpApply(); } });
+  document.addEventListener("keydown", (e) => {
+    if ($("kp").hidden) return;
+    if (e.key === "Escape") { e.preventDefault(); closeKeypad(); return; }
+    if (kp.step !== 1) return;
+    if (/^[0-9]$/.test(e.key)) { e.preventDefault(); kpKey(e.key); }
+    else if (e.key === "Backspace") { e.preventDefault(); kpKey("⌫"); }
+    else if (e.key === "Enter") { e.preventDefault(); if (kp.digits !== "") kpStep(2); }
+  });
+  if (window.visualViewport) { visualViewport.addEventListener("resize", fitKeypad); visualViewport.addEventListener("scroll", fitKeypad); }
   $("form").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); save(); } });
   $("tabList").addEventListener("click", () => { location.hash = "list"; setView("list"); });
   $("tabHist").addEventListener("click", () => { location.hash = "history"; setView("hist"); });
