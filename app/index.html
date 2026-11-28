@@ -631,7 +631,7 @@ h1 { font-size: 1.2rem; }
     <datalist id="knownNames"></datalist>
   </section>
   </div>
-  <p class="ver">Ver.27</p>
+  <p class="ver">Ver.27.1</p>
 </div>
 <div class="modal" id="nameModal" hidden role="dialog" aria-modal="true" aria-labelledby="nmTitle">
   <div class="sheet">
@@ -2158,7 +2158,17 @@ h1 { font-size: 1.2rem; }
   $("pSave").addEventListener("click", savePlan);
   document.querySelectorAll("#pKind button").forEach((b) => b.addEventListener("click", () => setPlanKind(b.dataset.kind)));
   $("pItem").addEventListener("change", (e) => { state.planItem = e.target.value; renderPlans(); });
-  $("pQty").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); savePlan(); } });
+  // PC の Enter：数量 → 現場名 → （よみ）→ 登録。漢字変換を決める Enter では動かない
+  const imeEnter = (e) => e.isComposing || e.keyCode === 229;
+  $("pQty").addEventListener("keydown", (e) => { if (e.key === "Enter" && !imeEnter(e)) { e.preventDefault(); $("pMemo").focus(); } });
+  $("pMemo").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || imeEnter(e)) return;
+    e.preventDefault();
+    if (state.sitesOpen) openSites(false);
+    if (!$("pYomiWrap").hidden && !$("pYomi").value.trim()) $("pYomi").focus();
+    else savePlan();
+  });
+  $("pYomi").addEventListener("keydown", (e) => { if (e.key === "Enter" && !imeEnter(e)) { e.preventDefault(); savePlan(); } });
   document.querySelectorAll("#hDays button").forEach((b) => b.addEventListener("click", () => { state.hDays = Number(b.dataset.days); renderHist(); }));
   $("hItem").addEventListener("change", (e) => { state.hItem = e.target.value; renderHist(); });
   state.evDate = dk(new Date());
