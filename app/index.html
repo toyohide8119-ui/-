@@ -232,6 +232,8 @@ td .unit { color: var(--muted); font-size: .8rem; margin-left: 2px; }
 .daytbl th:first-child, .daytbl td:first-child { min-width: 0; padding-left: 0; }
 .daytbl .nm { text-align: left; width: 100%; }
 .daytbl .nm > span { display: block; }
+.daytbl .site-note .np { display: block; }
+.daytbl td.nm { min-width: 9em; }
 .daytbl .site-note { display: block; font-size: .75rem; color: var(--muted); white-space: normal; overflow-wrap: anywhere; line-height: 1.3; }
 .fhint { font-size: .75rem; color: var(--muted); }
 .dayhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
@@ -347,6 +349,8 @@ h1 { font-size: 1.2rem; }
 .modal.top { align-items: flex-start; }
 .es-list { display: flex; flex-direction: column; max-height: min(40vh, 300px); overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
 .es-list:empty { display: none; }
+.es-lbl { margin: 0 0 -6px; font-size: .78rem; color: var(--muted); }
+.es-lbl:empty { display: none; }
 .es-list button { text-align: left; border: 0; border-top: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 10px 12px; font-size: 1rem; display: flex; align-items: baseline; gap: 8px; }
 .es-list button:first-child { border-top: 0; }
 .es-list button small { color: var(--muted); font-size: .75rem; }
@@ -416,9 +420,11 @@ h1 { font-size: 1.2rem; }
 .pmemo-l { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .combo { position: relative; display: flex; }
 .combo input { flex: 1; min-width: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
-#pDrop { flex: 0 0 48px; border: 1px solid var(--line); border-left: 0; background: var(--sunk); color: var(--ink); font-size: .9rem; cursor: pointer; border-radius: 0 8px 8px 0; }
-#pDrop[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); }
-.combo:has(#pDrop[hidden]) input { border-radius: 8px; }
+#pDrop, #pPlaceDrop { flex: 0 0 48px; border: 1px solid var(--line); border-left: 0; background: var(--sunk); color: var(--ink); font-size: .9rem; cursor: pointer; border-radius: 0 8px 8px 0; }
+#pDrop[aria-expanded="true"], #pPlaceDrop[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); }
+.combo:has(> button[hidden]) input { border-radius: 8px; }
+#pPlaceLbl { display: block; }
+.pmemo-l .opt { font-size: .72rem; margin-left: 4px; }
 .dropdown { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); overflow: hidden; }
 .sites { max-height: 15.5em; overflow-y: auto; overscroll-behavior: contain; }
 .site { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); padding: 11px 14px; font-size: 1rem; text-align: left; cursor: pointer; }
@@ -558,7 +564,7 @@ h1 { font-size: 1.2rem; }
         <label>品目<select id="pFItem"></select></label>
         <label>数量<input id="pQty" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="例：50"></label>
         <div class="pmemo-l">
-          <label for="pMemo" id="pMemoLbl">現場名・相手先</label>
+          <label for="pMemo" id="pMemoLbl">取引業者</label>
           <div class="combo" id="pCombo">
             <input id="pMemo" maxlength="60" autocomplete="off" placeholder="入力するか ▼ から選ぶ" role="combobox" aria-autocomplete="list" aria-controls="pSites" aria-expanded="false">
             <button type="button" id="pDrop" aria-label="リストから選ぶ" aria-expanded="false" hidden>▼</button>
@@ -569,6 +575,18 @@ h1 { font-size: 1.2rem; }
           </div>
         </div>
         <label class="pmemo-l" id="pYomiWrap" hidden>よみ（ひらがな・並び順に使います）<input id="pYomi" maxlength="60" autocomplete="off" placeholder="例：おおぐちけんせつ"></label>
+        <div class="pmemo-l" id="pPlaceWrap">
+          <label for="pPlace" id="pPlaceLbl">現場名<span class="opt">（なくても登録できます）</span></label>
+          <div class="combo" id="pPCombo">
+            <input id="pPlace" maxlength="60" autocomplete="off" placeholder="入力するか ▼ から選ぶ" role="combobox" aria-autocomplete="list" aria-controls="pPlaces" aria-expanded="false">
+            <button type="button" id="pPlaceDrop" aria-label="現場名をリストから選ぶ" aria-expanded="false" hidden>▼</button>
+            <div class="dropdown" id="pPlacesBox" hidden>
+              <div class="sites" id="pPlaces" role="listbox" aria-labelledby="pPlaceLbl"></div>
+              <div class="sites-foot"><span id="pPlacesNote"></span><button type="button" class="linkbtn" id="pPlacesEdit" aria-pressed="false">整理</button></div>
+            </div>
+          </div>
+        </div>
+        <label class="pmemo-l" id="pPYomiWrap" hidden>現場名のよみ（ひらがな）<input id="pPYomi" maxlength="60" autocomplete="off" placeholder="例：えきまえさいかいはつ"></label>
       </div>
       <div class="actions"><span class="spacer"></span><button class="btn" id="pCancel">キャンセル</button><button class="btn primary" id="pSave">登録</button></div>
     </section>
@@ -631,7 +649,7 @@ h1 { font-size: 1.2rem; }
     <datalist id="knownNames"></datalist>
   </section>
   </div>
-  <p class="ver">Ver.27.1</p>
+  <p class="ver">Ver.28</p>
 </div>
 <div class="modal" id="nameModal" hidden role="dialog" aria-modal="true" aria-labelledby="nmTitle">
   <div class="sheet">
@@ -648,11 +666,13 @@ h1 { font-size: 1.2rem; }
 </div>
 <div class="modal top" id="esModal" hidden role="dialog" aria-modal="true" aria-labelledby="esTitle">
   <div class="sheet">
-    <div><h2 id="esTitle">現場名・相手先を付ける</h2><p class="note" id="esSub"></p></div>
-    <input id="esInput" maxlength="57" autocomplete="off" enterkeyhint="done" placeholder="入力するか下から選ぶ" aria-label="現場名・相手先">
-    <div class="es-list" id="esList" role="listbox" aria-label="現場名・相手先の候補"></div>
+    <div><h2 id="esTitle">取引業者・現場名を付ける</h2><p class="note" id="esSub"></p></div>
+    <label>取引業者<input id="esInput" maxlength="57" autocomplete="off" enterkeyhint="next" placeholder="入力するか下から選ぶ"></label>
+    <label>現場名<input id="esPlace" maxlength="60" autocomplete="off" enterkeyhint="done" placeholder="入力するか下から選ぶ（なくてもOK）"></label>
+    <p class="es-lbl" id="esListLbl"></p>
+    <div class="es-list" id="esList" role="listbox" aria-labelledby="esListLbl"></div>
     <div class="actions">
-      <button class="btn ghost" id="esDel" hidden>現場名を消す</button>
+      <button class="btn ghost" id="esDel" hidden>両方消す</button>
       <span class="spacer"></span>
       <button class="btn" id="esCancel">やめる</button>
       <button class="btn primary" id="esSave" disabled>保存</button>
@@ -1138,7 +1158,7 @@ h1 { font-size: 1.2rem; }
   const dLabel = (k, wd) => { const [y, m, d] = k.split("-").map(Number); const t = new Date(y, m - 1, d); return m + "/" + d + (wd ? "（" + WD[t.getDay()] + "）" : ""); };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-  function logChange(item, oldQ, newQ, memo) {
+  function logChange(item, oldQ, newQ, memo, place) {
     const delta = num(newQ) - num(oldQ);
     if (!delta || !state.db || !item || !item.id) return;
     const now = new Date(), date = dk(now), at = now.getTime();
@@ -1149,6 +1169,7 @@ h1 { font-size: 1.2rem; }
       date, itemId: item.id, name: item.name || "", unit: item.unit || "",
       delta, qty: num(newQ), at, by: state.me || null, byName: state.myName || "",
       ...(memo ? { memo: String(memo).slice(0, 60) } : {}),
+      ...(place ? { place: String(place).slice(0, 60) } : {}),
     }).catch(() => {});
 
     // 2) running daily totals per item per person (for the day-by-day view)
@@ -1276,44 +1297,53 @@ h1 { font-size: 1.2rem; }
     return !eventNote(e);
   }
   const siteOfEvent = (e) => (e.memo && e.memo.startsWith("出庫：") ? e.memo.slice(3) : "");
-  const es = { ev: null, filter: false };
+  const hasSiteOrPlace = (e) => !!(siteOfEvent(e) || e.place);
+  const es = { ev: null, filter: false, c: null };
   function openEventSite(e) {
     if (needName()) return;
-    es.ev = e; es.filter = false;
+    es.ev = e; es.filter = false; es.c = CS;
     subscribeSites();
-    const cur = siteOfEvent(e);
-    $("esTitle").textContent = cur ? "現場名・相手先を直す" : "現場名・相手先を付ける";
+    const had = hasSiteOrPlace(e);
+    $("esTitle").textContent = had ? "取引業者・現場名を直す" : "取引業者・現場名を付ける";
     $("esSub").textContent = dLabel(e.date) + " " + hm(e.at) + "　" + (e.name || "") + " " + signed(num(e.delta)) + (e.unit || "");
-    $("esInput").value = cur;
-    $("esDel").hidden = !cur;
+    $("esInput").value = siteOfEvent(e);
+    $("esPlace").value = e.place || "";
+    $("esDel").hidden = !had;
     $("esModal").hidden = false;
     renderEsList();
   }
   function closeEventSite() { $("esModal").hidden = true; es.ev = null; }
+  // 候補は、いま触っている欄（取引業者か現場名）のリストを出す
   function renderEsList() {
-    if ($("esModal").hidden) return;
-    const v = $("esInput").value.trim();
-    const all = siteList();
+    if ($("esModal").hidden || !es.c) return;
+    const c = es.c, inp = $(c === CS ? "esInput" : "esPlace");
+    const v = inp.value.trim();
+    const all = listOf(c);
     const q = es.filter ? v : "";
     const list = q && all.some((n) => n.includes(q) && n !== q) ? all.filter((n) => n.includes(q)) : all;
+    $("esListLbl").textContent = list.length ? c.label + "の候補（あいうえお順）" : "";
     $("esList").replaceChildren(...list.map((n) => el("button", {
       role: "option", "aria-selected": String(n === v),
-      onclick: () => { $("esInput").value = n; es.filter = false; renderEsList(); },
-    }, el("span", {}, n), needsYomi(n) && yomiOf(n) ? el("small", {}, yomiOf(n)) : null)));
-    $("esSave").disabled = !v || v === siteOfEvent(es.ev || {});
+      onclick: () => { inp.value = n; es.filter = false; renderEsList(); },
+    }, el("span", {}, n), needsYomi(n) && yomiIn(c, n) ? el("small", {}, yomiIn(c, n)) : null)));
+    const e = es.ev || {};
+    const s1 = $("esInput").value.trim(), p1 = $("esPlace").value.trim();
+    $("esSave").disabled = (!s1 && !p1) || (s1 === siteOfEvent(e) && p1 === (e.place || ""));
   }
   async function saveEventSite(remove) {
     const e = es.ev;
     if (!e || !state.db) return;
     const n = remove ? "" : $("esInput").value.trim().slice(0, 57);
-    if (!remove && !n) return;
+    const pl = remove ? "" : $("esPlace").value.trim().slice(0, 60);
+    if (!remove && !n && !pl) return;
     const memo = n ? "出庫：" + n : "出庫";
     closeEventSite();
     try {
-      await w(state.db.collection("events").doc(e.id).update({ memo }));
-      e.memo = memo;
+      await w(state.db.collection("events").doc(e.id).update({ memo, place: pl }));
+      e.memo = memo; e.place = pl;
       if (n) rememberSite(n, "");
-      toast(n ? "「" + (e.name || "") + "」の出庫に「" + n + "」を付けました" : "現場名を消しました");
+      if (pl) rememberName(CP, pl, "");
+      toast(remove ? "取引業者・現場名を消しました" : "「" + (e.name || "") + "」の出庫に「" + [n, pl].filter(Boolean).join("／") + "」を付けました");
     } catch (err) {
       if (err && err.code === "permission-denied") toast("保存できませんでした。Firebaseのルールを新しいものに貼り替えてください");
       else writeFailed(err);
@@ -1321,6 +1351,8 @@ h1 { font-size: 1.2rem; }
     renderDay();
   }
 
+  // 「出庫：A社／現場：B」は、現場を2行目に分けて読みやすく
+  const noteParts = (t) => { const i = t.indexOf("／現場："); return i < 0 ? [t] : [t.slice(0, i), el("span", { class: "np" }, t.slice(i + 1))]; };
   function renderDay() {
     if (state.view !== "hist") return;
     subscribeEvents();
@@ -1353,9 +1385,9 @@ h1 { font-size: 1.2rem; }
     const rows = [...evs].reverse().map((e) => el("tr", {},
       el("td", {}, hm(e.at)),
       showNm ? el("td", { class: "nm" }, single ? null : el("span", {}, e.name || ""),
-        notes.get(e) ? el("small", { class: "site-note" }, notes.get(e),
-          canSite(e) && siteOfEvent(e) ? el("button", { class: "site-fix", onclick: () => openEventSite(e) }, "直す") : null) : null,
-        canSite(e) && !siteOfEvent(e) ? el("button", { class: "site-add", onclick: () => openEventSite(e) }, "＋現場名") : null) : null,
+        notes.get(e) ? el("small", { class: "site-note" }, ...noteParts(notes.get(e)),
+          canSite(e) && hasSiteOrPlace(e) ? el("button", { class: "site-fix", onclick: () => openEventSite(e) }, "直す") : null) : null,
+        canSite(e) && !hasSiteOrPlace(e) ? el("button", { class: "site-add", onclick: () => openEventSite(e) }, "＋業者・現場") : null) : null,
       td(signed(num(e.delta))),
       td(num(e.qty), e.unit),
       el("td", { class: "muted" }, whoName(e.by, e.byName) || "—")));
@@ -1646,149 +1678,166 @@ h1 { font-size: 1.2rem; }
     }, () => {});
   }
 
-  // ---- 現場名・相手先のリスト（全員で共有） ----
+  // ---- 取引業者・現場名のリスト（全員で共有） ----
   function siteId(name) {
     let h = 0x811c9dc5;
     for (const c of name) { h ^= c.codePointAt(0); h = Math.imul(h, 0x01000193) >>> 0; }
     return "s" + h.toString(36) + "_" + [...name].length;
   }
-  function subscribeSites() {
-    if (!state.db || state.sitesSub) return;
-    state.sitesSub = true;
-    state.db.collection("sites").onSnapshot((snap) => {
-      state.sites = new Map(snap.docs.map((d) => [d.data().name, d.data()]));
-      renderSites();
+  // 取引業者（sites）と現場名（places）は、同じしくみの別々のリスト
+  const COMBOS = {
+    site: { col: "sites", key: "memo", label: "取引業者", inp: "pMemo", drop: "pDrop", box: "pSitesBox", list: "pSites", note: "pSitesNote", edit: "pSitesEdit", wrap: "pCombo", yw: "pYomiWrap", y: "pYomi", ex: "おおぐちけんせつ" },
+    place: { col: "places", key: "place", label: "現場名", inp: "pPlace", drop: "pPlaceDrop", box: "pPlacesBox", list: "pPlaces", note: "pPlacesNote", edit: "pPlacesEdit", wrap: "pPCombo", yw: "pPYomiWrap", y: "pPYomi", ex: "えきまえさいかいはつ" },
+  };
+  Object.values(COMBOS).forEach((c) => Object.assign(c, { map: new Map(), sub: false, open: false, editing: false, filter: false, ime: "", touched: false }));
+  const CS = COMBOS.site, CP = COMBOS.place;
+  const comboList = () => Object.values(COMBOS);
+  function subscribeCombo(c) {
+    if (!state.db || c.sub) return;
+    c.sub = true;
+    state.db.collection(c.col).onSnapshot((snap) => {
+      c.map = new Map(snap.docs.map((d) => [d.data().name, d.data()]));
+      renderCombo(c);
       renderEsList();
     }, () => {});
   }
-  function siteList() {
+  function subscribeSites() { comboList().forEach(subscribeCombo); }
+  function listOf(c) {
     const m = new Map();
     // 予定に入っている名前も候補にする（リスト保存前の分も拾う）
     [...state.plans, ...state.plansRecent].forEach((p) => {
-      if (p.kind === "out" && p.memo) m.set(p.memo, Math.max(m.get(p.memo) || 0, p.createdAt || 0));
+      const v = p[c.key];
+      if (p.kind === "out" && v) m.set(v, Math.max(m.get(v) || 0, p.createdAt || 0));
     });
-    state.sites.forEach((d, name) => { if (name) m.set(name, Math.max(m.get(name) || 0, d.lastUsed || 0)); });
-    return [...m].filter(([name]) => !(state.sites.get(name) || {}).hidden).map(([n]) => n)
-      .sort((a, b) => jaCmp(sortKey(a), sortKey(b)) || jaCmp(a, b));
+    c.map.forEach((d, name) => { if (name) m.set(name, Math.max(m.get(name) || 0, d.lastUsed || 0)); });
+    return [...m].filter(([name]) => !(c.map.get(name) || {}).hidden).map(([n]) => n)
+      .sort((a, b) => jaCmp(sortKeyOf(c, a), sortKeyOf(c, b)) || jaCmp(a, b));
   }
-  const KANA_ONLY = /^[\u3040-\u30ff\u30fc\s・ー0-9０-９A-Za-zＡ-Ｚａ-ｚ\-－()（）]+$/;
+  const siteList = () => listOf(CS);
+  const KANA_ONLY = /^[぀-ヿー\s・ー0-9０-９A-Za-zＡ-Ｚａ-ｚ\-－()（）]+$/;
   function needsYomi(n) { return !!n && !KANA_ONLY.test(n); }
-  function yomiOf(n) { return ((state.sites.get(n) || {}).yomi || "").trim(); }
-  function sortKey(n) { return yomiOf(n) || n; }
-  function toHira(s) { return String(s).replace(/[\u30a1-\u30f6]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60)); }
+  function yomiIn(c, n) { return ((c.map.get(n) || {}).yomi || "").trim(); }
+  function sortKeyOf(c, n) { return yomiIn(c, n) || n; }
+  function toHira(s) { return String(s).replace(/[ァ-ヶ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60)); }
   const GYO = ["あ", "か", "さ", "た", "な", "は", "ま", "や", "ら", "わ"];
-  function gyoOf(n) {
-    const c = toHira(sortKey(n)).charAt(0);
-    if (!/[\u3041-\u3096]/.test(c)) return /[\u3400-\u9fff]/.test(c) ? "漢字（よみ未設定）" : "記号・英数字";
+  function gyoOf(c, n) {
+    const ch = toHira(sortKeyOf(c, n)).charAt(0);
+    if (!/[ぁ-ゖ]/.test(ch)) return /[㐀-鿿]/.test(ch) ? "漢字（よみ未設定）" : "記号・英数字";
     let g = GYO[0];
-    for (const h of GYO) if (jaColl.compare(c, h) >= 0) g = h;
+    for (const h of GYO) if (jaColl.compare(ch, h) >= 0) g = h;
     return g + "行";
   }
-  function syncYomiField(fromPick) {
-    const n = $("pMemo").value.trim();
+  function syncYomi(c, fromPick) {
+    const n = $(c.inp).value.trim();
     const show = state.planKind === "out" && needsYomi(n);
-    $("pYomiWrap").hidden = !show;
-    if (!show) { $("pYomi").value = ""; state.yomiTouched = false; return; }
-    const known = yomiOf(n);
-    if (fromPick || (known && !state.yomiTouched)) { $("pYomi").value = known; state.yomiTouched = false; }
+    $(c.yw).hidden = !show;
+    if (!show) { $(c.y).value = ""; c.touched = false; return; }
+    const known = yomiIn(c, n);
+    if (fromPick || (known && !c.touched)) { $(c.y).value = known; c.touched = false; }
   }
+  function syncYomiField(fromPick) { comboList().forEach((c) => syncYomi(c, fromPick)); }
   // あいうえお順（ひらがな・カタカナは同じ扱い、漢字は日本語の辞書順）
   const jaColl = new Intl.Collator("ja", { sensitivity: "base", numeric: true });
   function jaCmp(a, b) { return jaColl.compare(a, b); }
-  function renderSites() {
-    const box = $("pSitesBox");
+  function renderSites() { comboList().forEach(renderCombo); }
+  function renderCombo(c) {
+    const box = $(c.box);
     if (!box || $("pForm").hidden) return;
     const isOut = state.planKind === "out";
-    $("pDrop").hidden = !isOut;
-    if (!isOut) state.sitesOpen = false;
-    box.hidden = !state.sitesOpen;
-    $("pDrop").setAttribute("aria-expanded", String(state.sitesOpen));
-    $("pMemo").setAttribute("aria-expanded", String(state.sitesOpen));
-    if (!state.sitesOpen) return;
-    const q = $("pMemo").value.trim();
-    const all = siteList();
+    $(c.drop).hidden = !isOut;
+    if (!isOut) c.open = false;
+    box.hidden = !c.open;
+    $(c.drop).setAttribute("aria-expanded", String(c.open));
+    $(c.inp).setAttribute("aria-expanded", String(c.open));
+    if (!c.open) return;
+    const q = $(c.inp).value.trim();
+    const all = listOf(c);
     let list = all;
-    if (q && state.sitesFilter && !state.sitesEdit && !all.includes(q)) list = all.filter((n) => n.includes(q));
-    $("pSitesEdit").setAttribute("aria-pressed", String(state.sitesEdit));
-    $("pSitesEdit").textContent = state.sitesEdit ? "整理を終わる" : "整理";
-    $("pSitesNote").textContent = state.sitesEdit ? "予定には影響しません" : list.length + "件・あいうえお順";
+    if (q && c.filter && !c.editing && !all.includes(q)) list = all.filter((n) => n.includes(q));
+    $(c.edit).setAttribute("aria-pressed", String(c.editing));
+    $(c.edit).textContent = c.editing ? "整理を終わる" : "整理";
+    $(c.note).textContent = c.editing ? "予定には影響しません" : list.length + "件・あいうえお順";
     const rows = [];
     let lastG = "";
     list.forEach((n) => {
-      const g = gyoOf(n);
+      const g = gyoOf(c, n);
       if (g !== lastG && list.length > 6) { rows.push(el("div", { class: "kana-h", role: "presentation" }, g)); lastG = g; }
-      const y = yomiOf(n);
-      if (state.sitesEdit) {
+      const y = yomiIn(c, n);
+      if (c.editing) {
         rows.push(el("div", { class: "site edit" }, el("span", {}, n),
           el("span", { class: "eact" },
-            el("button", { type: "button", class: "btn mini", onclick: () => editYomi(n) }, y ? "よみ：" + y : "よみを入れる"),
-            el("button", { type: "button", class: "btn mini bad", onclick: () => hideSite(n) }, "消す"))));
+            el("button", { type: "button", class: "btn mini", onclick: () => editYomi(c, n) }, y ? "よみ：" + y : "よみを入れる"),
+            el("button", { type: "button", class: "btn mini bad", onclick: () => hideName(c, n) }, "消す"))));
         return;
       }
       rows.push(el("button", {
         type: "button", role: "option", class: "site", title: n,
-        "aria-selected": String(!state.sitesEdit && n === q),
-        onclick: () => state.sitesEdit ? hideSite(n) : pickSite(n),
-      }, el("span", {}, n), y ? el("small", {}, y) : !/^[\u3041-\u30ff]/.test(n) && needsYomi(n) ? el("small", { class: "noyomi" }, "よみ未設定") : null));
+        "aria-selected": String(n === q),
+        onclick: () => pickName(c, n),
+      }, el("span", {}, n), y ? el("small", {}, y) : !/^[ぁ-ヿ]/.test(n) && needsYomi(n) ? el("small", { class: "noyomi" }, "よみ未設定") : null));
     });
-    $("pSites").replaceChildren(...(rows.length ? rows : [el("span", { class: "none" },
+    $(c.list).replaceChildren(...(rows.length ? rows : [el("span", { class: "none" },
       q ? "一致する名前はありません。このまま登録すると、リストに追加されます" : "まだありません。一度入力して登録すると、ここに出ます")]));
-    const sel = $("pSites").querySelector('[aria-selected="true"]');
+    const sel = $(c.list).querySelector('[aria-selected="true"]');
     // 一覧の中だけをスクロール（画面全体は動かさない）
-    const box2 = $("pSites");
-    if (sel && (sel.offsetTop < box2.scrollTop || sel.offsetTop + sel.offsetHeight > box2.scrollTop + box2.clientHeight)) box2.scrollTop = sel.offsetTop - 8;
-    fitDropdown();
+    const lb = $(c.list);
+    if (sel && (sel.offsetTop < lb.scrollTop || sel.offsetTop + sel.offsetHeight > lb.scrollTop + lb.clientHeight)) lb.scrollTop = sel.offsetTop - 8;
+    fitDropdown(c);
   }
   // キーボードが出ていても、一覧が見えている範囲に収まるように高さを調整
-  function fitDropdown() {
-    const list = $("pSites"), inp = $("pMemo");
-    if (!state.sitesOpen || !inp) return;
+  function fitDropdown(c) {
+    if (!c) { comboList().forEach(fitDropdown); return; }
+    const list = $(c.list), inp = $(c.inp);
+    if (!c.open || !inp) return;
     const vv = window.visualViewport;
     const bottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
     const room = bottom - inp.getBoundingClientRect().bottom - 50;
     list.style.maxHeight = Math.max(96, Math.min(260, room)) + "px";
   }
   if (window.visualViewport) window.visualViewport.addEventListener("resize", () => fitDropdown());
-  function openSites(open) {
-    state.sitesOpen = open; state.sitesFilter = false;
-    if (!open) state.sitesEdit = false;
-    renderSites();
+  function openCombo(c, open) {
+    if (open) comboList().forEach((o) => { if (o !== c && o.open) { o.open = false; o.editing = false; renderCombo(o); } });
+    c.open = open; c.filter = false;
+    if (!open) c.editing = false;
+    renderCombo(c);
   }
-  function pickSite(n) {
-    $("pMemo").value = n;
-    syncYomiField(true);
-    openSites(false);
+  function openSites(open) { comboList().forEach((c) => openCombo(c, open && c === CS)); }
+  function pickName(c, n) {
+    $(c.inp).value = n;
+    syncYomi(c, true);
+    openCombo(c, false);
     if (!$("pQty").value) $("pQty").focus();
   }
-  function editYomi(n) {
-    const cur = yomiOf(n);
+  function editYomi(c, n) {
+    const cur = yomiIn(c, n);
     const v = window.prompt("「" + n + "」のよみ（ひらがな）", cur);
     if (v == null) return;
     const y = toHira(v.trim()).slice(0, 60);
-    state.sites.set(n, { ...(state.sites.get(n) || {}), name: n, yomi: y });
-    renderSites();
-    const body = { name: n, lastUsed: (state.sites.get(n) || {}).lastUsed || Date.now(), hidden: false, yomi: y };
-    state.db.collection("sites").doc(siteId(n)).set(body, { merge: true }).catch(() => toast("保存できませんでした。ルールの貼り替えを確認してください"));
+    c.map.set(n, { ...(c.map.get(n) || {}), name: n, yomi: y });
+    renderCombo(c);
+    const body = { name: n, lastUsed: (c.map.get(n) || {}).lastUsed || Date.now(), hidden: false, yomi: y };
+    state.db.collection(c.col).doc(siteId(n)).set(body, { merge: true }).catch(() => toast("保存できませんでした。ルールの貼り替えを確認してください"));
     toast(y ? "「" + n + "」のよみを「" + y + "」にしました" : "「" + n + "」のよみを消しました");
   }
-  function hideSite(n) {
-    state.sites.set(n, { ...(state.sites.get(n) || {}), name: n, hidden: true });
-    renderSites();
-    state.db.collection("sites").doc(siteId(n)).set({ name: n, lastUsed: Date.now(), hidden: true }, { merge: true }).catch(() => {});
+  function hideName(c, n) {
+    c.map.set(n, { ...(c.map.get(n) || {}), name: n, hidden: true });
+    renderCombo(c);
+    state.db.collection(c.col).doc(siteId(n)).set({ name: n, lastUsed: Date.now(), hidden: true }, { merge: true }).catch(() => {});
     toast("「" + n + "」をリストから消しました（予定はそのままです）");
   }
-  function rememberSite(n, yomi) {
+  function rememberName(c, n, yomi) {
     if (!n || !state.db) return;
     const body = { name: n, lastUsed: Date.now(), hidden: false };
     yomi = toHira(String(yomi || "").trim()).slice(0, 60);
     if (yomi && needsYomi(n)) body.yomi = yomi;
-    state.sites.set(n, { ...(state.sites.get(n) || {}), ...body });
-    state.db.collection("sites").doc(siteId(n)).set(body, { merge: true }).catch(() => {});
+    c.map.set(n, { ...(c.map.get(n) || {}), ...body });
+    state.db.collection(c.col).doc(siteId(n)).set(body, { merge: true }).catch(() => {});
   }
+  const rememberSite = (n, yomi) => rememberName(CS, n, yomi);
 
   function clearPlanForm() {
-    $("pQty").value = ""; $("pMemo").value = ""; $("pYomi").value = ""; $("pYomiWrap").hidden = true;
-    state.yomiTouched = false; state.imeYomi = "";
+    $("pQty").value = "";
+    comboList().forEach((c) => { $(c.inp).value = ""; $(c.y).value = ""; $(c.yw).hidden = true; c.touched = false; c.ime = ""; });
   }
   function openPlanForm(p) {
     if (needName()) return;
@@ -1804,6 +1853,7 @@ h1 { font-size: 1.2rem; }
       itemOptions($("pFItem"), false, p.itemId);
       $("pQty").value = String(num(p.qty));
       $("pMemo").value = p.memo || "";
+      $("pPlace").value = p.place || "";
       state.planKind = p.kind;
     } else {
       if (wasEdit) { clearPlanForm(); state.planKind = state.kindBeforeEdit || "out"; }
@@ -1814,7 +1864,7 @@ h1 { font-size: 1.2rem; }
     setPlanKind(state.planKind);
     syncYomiField(!!state.editPlan);
     subscribeSites();
-    state.sitesEdit = false; state.sitesOpen = false;
+    comboList().forEach((c) => { c.editing = false; c.open = false; });
     renderSites();
     if (state.editPlan) { $("pForm").scrollIntoView({ behavior: "smooth", block: "start" }); }
     else $("pQty").focus();
@@ -1829,7 +1879,8 @@ h1 { font-size: 1.2rem; }
     state.planKind = k;
     document.querySelectorAll("#pKind button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.kind === k)));
     $("pSave").textContent = state.editPlan ? "変更を保存" : KIND[k].label + "を登録";
-    $("pMemoLbl").textContent = k === "out" ? "現場名・相手先" : "メモ";
+    $("pMemoLbl").textContent = k === "out" ? "取引業者" : "メモ";
+    $("pPlaceWrap").hidden = k !== "out";
     syncYomiField(false);
     $("pMemo").placeholder = k === "out" ? "入力するか ▼ から選ぶ" : "例：○号機";
     renderSites();
@@ -1845,6 +1896,7 @@ h1 { font-size: 1.2rem; }
     const fields = {
       date, itemId: it.id, name: it.name || "", unit: it.unit || "", kind: state.planKind, qty,
       memo: $("pMemo").value.trim().slice(0, 60),
+      place: state.planKind === "out" ? $("pPlace").value.trim().slice(0, 60) : "",
     };
     const ed = state.editPlan;
     if (ed && !state.plans.some((x) => x.id === ed.id)) {
@@ -1853,14 +1905,14 @@ h1 { font-size: 1.2rem; }
     $("pSave").disabled = true;
     try {
       if (ed) {
-        const same = ["date", "itemId", "kind", "qty", "memo"].every((k) => String(ed[k] ?? "") === String(fields[k]));
+        const same = ["date", "itemId", "kind", "qty", "memo", "place"].every((k) => String(ed[k] ?? "") === String(fields[k]));
         if (!same) await w(state.db.collection("plans").doc(ed.id).update(fields));
-        if (fields.kind === "out") rememberSite(fields.memo, $("pYomi").value);
+        if (fields.kind === "out") { rememberSite(fields.memo, $("pYomi").value); rememberName(CP, fields.place, $("pPYomi").value); }
         toast(same ? "変更はありませんでした" : dLabel(date) + " " + it.name + " " + KIND[fields.kind].short + " " + (fields.kind === "out" ? "−" : "+") + qty + (it.unit || "") + " に直しました");
       } else {
         const body = { ...fields, status: "open", createdAt: Date.now(), createdBy: state.me || null, createdByName: state.myName || "" };
         await w(state.db.collection("plans").doc().set(body));
-        if (body.kind === "out") rememberSite(body.memo, $("pYomi").value);
+        if (body.kind === "out") { rememberSite(body.memo, $("pYomi").value); rememberName(CP, body.place, $("pPYomi").value); }
         toast(dLabel(date) + " " + it.name + " " + KIND[body.kind].short + " " + (body.kind === "out" ? "−" : "+") + qty + (it.unit || "") + " を登録しました");
       }
       clearPlanForm();
@@ -1872,11 +1924,13 @@ h1 { font-size: 1.2rem; }
   }
   // 「出庫済み：○○現場」のような、今日の動きに残す説明
   function planNote(p) { return KIND[p.kind].done + (p.memo ? "：" + p.memo : ""); }
+  // 現場名は「／現場：○○」として後ろに付ける
+  const withPlace = (t, place) => t + (place ? "／現場：" + place : "");
   // 今日の動きの1行に対応する予定の説明（新しい記録は memo、前の記録は予定の済み時刻から探す）
   function eventNote(e) {
-    if (e.memo) return e.memo;
+    if (e.memo) return withPlace(e.memo, e.place);
     const p = state.plansRecent.find((x) => x.status === "done" && x.itemId === e.itemId && Math.abs(num(x.doneAt) - num(e.at)) < 15000);
-    return p ? planNote(p) : "";
+    return p ? withPlace(planNote(p), p.place) : "";
   }
   async function finishPlan(p, btn) {
     if (needName()) return;
@@ -1888,7 +1942,7 @@ h1 { font-size: 1.2rem; }
     try {
       state.pending.delete(it.id);
       await w(state.db.collection("items").doc(it.id).update({ qty: next, ...stamp() }));
-      logChange(it, cur, next, planNote(p));
+      logChange(it, cur, next, planNote(p), p.place);
       await w(state.db.collection("plans").doc(p.id).update({ status: "done", doneAt: Date.now(), doneBy: state.me || null, doneByName: state.myName || "" }));
       toast(it.name + " を " + next + (it.unit || "") + " にしました（" + KIND[p.kind].done + "）");
     } catch (e) { writeFailed(e); }
@@ -1953,7 +2007,7 @@ h1 { font-size: 1.2rem; }
           el("div", { class: "pdate" }, dLabel(p.date, true), overdue ? el("span", { class: "pill out" }, "未処理") : p.date === today ? el("span", { class: "pill low" }, "今日") : null),
           el("div", { class: "pkind " + p.kind }, k.short + " " + (k.sign < 0 ? "−" : "+") + num(p.qty) + unit),
           el("div", { class: "pafter sev-" + r.sev }, "→ " + r.after + unit, r.sev === "short" ? el("small", {}, "不足") : null),
-          el("div", { class: "pmemo" }, [p.memo, p.createdByName && "登録：" + p.createdByName].filter(Boolean).join("　")),
+          el("div", { class: "pmemo" }, [p.memo, p.place && "現場：" + p.place, p.createdByName && "登録：" + p.createdByName].filter(Boolean).join("　")),
           state.canWrite ? el("div", { class: "pact" }, ed, fin, can) : null));
       });
       return card;
@@ -1970,7 +2024,8 @@ h1 { font-size: 1.2rem; }
         el("div", { class: "ddate" }, dLabel(p.date, true)),
         el("div", { class: "dname" }, p.name),
         el("div", { class: "pkind " + p.kind }, KIND[p.kind].short + " " + (p.kind === "out" ? "−" : "+") + num(p.qty) + unit),
-        el("div", { class: "dmemo" }, p.memo ? el("span", {}, p.memo) : el("span", { class: "none" }, "現場名・相手先なし"),
+        el("div", { class: "dmemo" }, p.memo ? el("span", {}, p.memo) : p.kind === "out" && !p.place ? el("span", { class: "none" }, "取引業者なし") : null,
+          p.place ? el("span", {}, "現場：" + p.place) : null,
           p.doneByName ? el("small", { class: "dby" }, p.doneByName) : null),
         el("span", { class: "dres " + (done ? "done" : "cancel") }, done ? KIND[p.kind].done : "取消"));
     }));
@@ -2083,8 +2138,12 @@ h1 { font-size: 1.2rem; }
   $("cancelBtn").addEventListener("click", closeForm);
   $("saveBtn").addEventListener("click", save);
   $("delBtn").addEventListener("click", del);
-  $("esInput").addEventListener("input", () => { es.filter = true; renderEsList(); });
-  $("esInput").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (!$("esSave").disabled) saveEventSite(); } });
+  [["esInput", CS], ["esPlace", CP]].forEach(([id, c]) => {
+    $(id).addEventListener("focus", () => { if (es.c !== c) { es.c = c; es.filter = false; renderEsList(); } });
+    $(id).addEventListener("input", () => { es.c = c; es.filter = true; renderEsList(); });
+  });
+  $("esInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); $("esPlace").focus(); } });
+  $("esPlace").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); if (!$("esSave").disabled) saveEventSite(); } });
   $("esSave").addEventListener("click", () => saveEventSite());
   $("esDel").addEventListener("click", () => saveEventSite(true));
   $("esCancel").addEventListener("click", closeEventSite);
@@ -2120,55 +2179,67 @@ h1 { font-size: 1.2rem; }
   $("reorderBtn").addEventListener("click", () => setReorder(!state.reorder));
   $("pCancel").addEventListener("click", closePlanForm);
   // IME の変換前のひらがなを拾って、よみ欄に自動で入れる（エクセルのふりがなと同じ考え方）
-  let compKana = "";
-  $("pMemo").addEventListener("compositionstart", () => { compKana = ""; });
-  $("pMemo").addEventListener("compositionupdate", (e) => { if (/^[\u3041-\u3096ー]+$/.test(e.data || "")) compKana = e.data; });
-  $("pMemo").addEventListener("compositionend", (e) => {
-    const d = e.data || "";
-    state.imeYomi = (state.imeYomi || "") + (/^[\u3041-\u30ffー]+$/.test(d) ? toHira(d) : compKana);
-    compKana = "";
-    if (!state.yomiTouched && !yomiOf($("pMemo").value.trim())) { syncYomiField(false); if (!$("pYomiWrap").hidden) $("pYomi").value = state.imeYomi; }
+  comboList().forEach((c) => {
+    let compKana = "";
+    const inp = $(c.inp);
+    inp.addEventListener("compositionstart", () => { compKana = ""; });
+    inp.addEventListener("compositionupdate", (e) => { if (/^[ぁ-ゖー]+$/.test(e.data || "")) compKana = e.data; });
+    inp.addEventListener("compositionend", (e) => {
+      const d = e.data || "";
+      c.ime = (c.ime || "") + (/^[ぁ-ヿー]+$/.test(d) ? toHira(d) : compKana);
+      compKana = "";
+      if (!c.touched && !yomiIn(c, inp.value.trim())) { syncYomi(c, false); if (!$(c.yw).hidden) $(c.y).value = c.ime; }
+    });
+    $(c.y).addEventListener("input", () => { c.touched = true; });
+    inp.addEventListener("input", () => {
+      if (!inp.value.trim()) c.ime = "";
+      syncYomi(c, false);
+      // 入力中は一致する名前があるときだけリストを開く（エクセルの入力候補のように）
+      const q = inp.value.trim();
+      if (state.planKind === "out") {
+        const show = !!q && listOf(c).some((n) => n.includes(q) && n !== q);
+        if (show !== c.open) openCombo(c, show);
+        c.editing = false; c.filter = true;
+      }
+      renderCombo(c);
+    });
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && c.open) { e.preventDefault(); openCombo(c, false); }
+      if (e.key === "ArrowDown" && state.planKind === "out") {
+        e.preventDefault();
+        if (!c.open) openCombo(c, true);
+        const f = $(c.list).querySelector(".site"); if (f) f.focus();
+      }
+    });
+    $(c.list).addEventListener("keydown", (e) => {
+      const items = [...$(c.list).querySelectorAll(".site")]; const i = items.indexOf(document.activeElement);
+      if (e.key === "ArrowDown" && i < items.length - 1) { e.preventDefault(); items[i + 1].focus(); }
+      if (e.key === "ArrowUp") { e.preventDefault(); (i > 0 ? items[i - 1] : inp).focus(); }
+      if (e.key === "Escape") { e.preventDefault(); openCombo(c, false); inp.focus(); }
+    });
+    $(c.drop).addEventListener("click", () => { openCombo(c, !c.open); if (!c.open) inp.focus(); });
+    $(c.edit).addEventListener("click", () => { c.editing = !c.editing; renderCombo(c); });
+    document.addEventListener("pointerdown", (e) => { if (c.open && !$(c.wrap).contains(e.target)) openCombo(c, false); });
   });
-  $("pYomi").addEventListener("input", () => { state.yomiTouched = true; });
-  $("pMemo").addEventListener("input", (e) => {
-    if (!$("pMemo").value.trim()) state.imeYomi = "";
-    syncYomiField(false);
-    // 入力中は一致する名前があるときだけリストを開く（エクセルの入力候補のように）
-    const q = $("pMemo").value.trim();
-    if (state.planKind === "out") { state.sitesEdit = false; state.sitesOpen = !!q && siteList().some((n) => n.includes(q) && n !== q); state.sitesFilter = true; }
-    renderSites();
-  });
-  $("pMemo").addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && state.sitesOpen) { e.preventDefault(); openSites(false); }
-    if (e.key === "ArrowDown" && state.planKind === "out") {
-      e.preventDefault();
-      if (!state.sitesOpen) openSites(true);
-      const f = $("pSites").querySelector(".site"); if (f) f.focus();
-    }
-  });
-  $("pSites").addEventListener("keydown", (e) => {
-    const items = [...$("pSites").querySelectorAll(".site")]; const i = items.indexOf(document.activeElement);
-    if (e.key === "ArrowDown" && i < items.length - 1) { e.preventDefault(); items[i + 1].focus(); }
-    if (e.key === "ArrowUp") { e.preventDefault(); (i > 0 ? items[i - 1] : $("pMemo")).focus(); }
-    if (e.key === "Escape") { e.preventDefault(); openSites(false); $("pMemo").focus(); }
-  });
-  $("pDrop").addEventListener("click", () => { openSites(!state.sitesOpen); if (!state.sitesOpen) $("pMemo").focus(); });
-  $("pSitesEdit").addEventListener("click", () => { state.sitesEdit = !state.sitesEdit; renderSites(); });
-  document.addEventListener("pointerdown", (e) => { if (state.sitesOpen && !$("pCombo").contains(e.target)) openSites(false); });
   $("pSave").addEventListener("click", savePlan);
   document.querySelectorAll("#pKind button").forEach((b) => b.addEventListener("click", () => setPlanKind(b.dataset.kind)));
   $("pItem").addEventListener("change", (e) => { state.planItem = e.target.value; renderPlans(); });
-  // PC の Enter：数量 → 現場名 → （よみ）→ 登録。漢字変換を決める Enter では動かない
+  // PC の Enter：数量 → 取引業者 →（よみ）→ 現場名 →（よみ）→ 登録。現場名は空のままでも登録できる。
+  // 漢字変換を決める Enter では動かない
   const imeEnter = (e) => e.isComposing || e.keyCode === 229;
-  $("pQty").addEventListener("keydown", (e) => { if (e.key === "Enter" && !imeEnter(e)) { e.preventDefault(); $("pMemo").focus(); } });
-  $("pMemo").addEventListener("keydown", (e) => {
+  const onEnter = (id, fn) => $(id).addEventListener("keydown", (e) => {
     if (e.key !== "Enter" || imeEnter(e)) return;
     e.preventDefault();
-    if (state.sitesOpen) openSites(false);
-    if (!$("pYomiWrap").hidden && !$("pYomi").value.trim()) $("pYomi").focus();
-    else savePlan();
+    comboList().forEach((c) => { if (c.open) openCombo(c, false); });
+    fn();
   });
-  $("pYomi").addEventListener("keydown", (e) => { if (e.key === "Enter" && !imeEnter(e)) { e.preventDefault(); savePlan(); } });
+  const afterSite = () => { if (state.planKind === "out") $("pPlace").focus(); else savePlan(); };
+  const afterPlace = () => savePlan();
+  onEnter("pQty", () => $("pMemo").focus());
+  onEnter("pMemo", () => { if (!$("pYomiWrap").hidden && !$("pYomi").value.trim()) $("pYomi").focus(); else afterSite(); });
+  onEnter("pYomi", afterSite);
+  onEnter("pPlace", () => { if (!$("pPYomiWrap").hidden && !$("pPYomi").value.trim()) $("pPYomi").focus(); else afterPlace(); });
+  onEnter("pPYomi", afterPlace);
   document.querySelectorAll("#hDays button").forEach((b) => b.addEventListener("click", () => { state.hDays = Number(b.dataset.days); renderHist(); }));
   $("hItem").addEventListener("change", (e) => { state.hItem = e.target.value; renderHist(); });
   state.evDate = dk(new Date());

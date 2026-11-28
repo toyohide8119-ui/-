@@ -34,23 +34,25 @@ service cloud.firestore {
     }
 
     function validEvent(d) {
-      return d.keys().hasOnly(['date', 'itemId', 'name', 'unit', 'delta', 'qty', 'at', 'by', 'byName', 'memo'])
+      return d.keys().hasOnly(['date', 'itemId', 'name', 'unit', 'delta', 'qty', 'at', 'by', 'byName', 'memo', 'place'])
         && str(d.date, 10) && str(d.itemId, 40) && str(d.name, 60) && str(d.unit, 10)
         && d.delta is number && d.delta >= -1000000 && d.delta <= 1000000
         && qty(d.qty)
         && d.at is number
         && (d.by == null || str(d.by, 40))
         && str(d.byName, 20)
-        && (!('memo' in d) || str(d.memo, 60));
+        && (!('memo' in d) || str(d.memo, 60))
+        && (!('place' in d) || str(d.place, 60));
     }
 
     function validPlan(d) {
-      return d.keys().hasOnly(['date', 'itemId', 'name', 'unit', 'kind', 'qty', 'memo', 'status',
+      return d.keys().hasOnly(['date', 'itemId', 'name', 'unit', 'kind', 'qty', 'memo', 'place', 'status',
                                'createdAt', 'createdBy', 'createdByName', 'doneAt', 'doneBy', 'doneByName'])
         && str(d.date, 10) && str(d.itemId, 40) && str(d.name, 60) && str(d.unit, 10)
         && d.kind in ['out', 'make']
         && qty(d.qty) && d.qty > 0
         && str(d.memo, 60)
+        && (!('place' in d) || str(d.place, 60))
         && d.status in ['open', 'done', 'cancel']
         && d.createdAt is number
         && (d.createdBy == null || str(d.createdBy, 40))
@@ -69,6 +71,13 @@ service cloud.firestore {
     }
 
     match /sites/{id} {
+      allow read: if true;
+      allow create, update: if validSite(request.resource.data);
+      allow delete: if false;
+    }
+
+    // 現場名のリスト（取引業者のリストと同じ形）
+    match /places/{id} {
       allow read: if true;
       allow create, update: if validSite(request.resource.data);
       allow delete: if false;
@@ -95,9 +104,9 @@ service cloud.firestore {
     match /events/{id} {
       allow read: if true;
       allow create: if validEvent(request.resource.data);
-      // あとから出庫に現場名を付ける・直す・消す（memo だけ、「出庫」で始まる形だけ）
+      // あとから出庫に取引業者・現場名を付ける・直す・消す（memo と place だけ、memo は「出庫」で始まる形だけ）
       allow update: if validEvent(request.resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memo'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memo', 'place'])
         && resource.data.delta < 0
         && request.resource.data.memo.matches('^出庫(：.+)?$');
       allow delete: if false;
